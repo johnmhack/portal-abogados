@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../supabase'
 import logo from '../assets/LOGO_RUBY_RAMOS_SIMBOLO.svg'
+import fondo from '../assets/fondo_diseño.jpg'
 import { Eye, EyeOff } from 'lucide-react'
 
 export default function Login() {
@@ -159,7 +160,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    backgroundImage: 'url(/src/assets/fondo_diseño.jpg)',
+    backgroundImage: `url(${fondo})`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat',
