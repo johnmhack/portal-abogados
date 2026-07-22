@@ -10,6 +10,7 @@ export default function Casos({ session }) {
   const [busqueda, setBusqueda] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [casoSeleccionado, setCasoSeleccionado] = useState(null)
+  const [procesosTypes, setProcesosTypes] = useState([])
   const [nuevo, setNuevo] = useState({
     titulo: '', descripcion: '', numero_radicado: '',
     ciudad: '', status: 'activo', client_id: ''
@@ -17,6 +18,7 @@ export default function Casos({ session }) {
 
   useEffect(() => {
     fetchCasos()
+    fetchProcesosTypes()
     fetchClientes()
   }, [])
 
@@ -29,6 +31,14 @@ export default function Casos({ session }) {
     setLoading(false)
   }
 
+  const fetchProcesosTypes = async () => {
+  const { data } = await supabase
+    .from('process_types')
+    .select('*')
+    .order('modulo')
+  setProcesosTypes(data || [])
+  }
+
   const fetchClientes = async () => {
     const { data } = await supabase.from('clients').select('id, nombre, apellido')
     setClientes(data || [])
@@ -38,13 +48,52 @@ export default function Casos({ session }) {
   if (!nuevo.titulo) return
   const datos = { ...nuevo }
   if (!datos.client_id) delete datos.client_id
-  const { data, error } = await supabase.from('cases').insert([datos])
-  console.log('resultado:', data, error)
-  if (!error) {
-    setModalOpen(false)
-    setNuevo({ titulo: '', descripcion: '', numero_radicado: '', ciudad: '', status: 'activo', client_id: '' })
-    fetchCasos()
+  if (!datos.process_type_id) delete datos.process_type_id
+
+  // Crear el caso
+  const { data: casoCreado, error } = await supabase
+    .from('cases')
+    .insert([datos])
+    .select()
+    .single()
+
+  if (error) { console.log('error:', error); return }
+
+  // Si tiene tipo de proceso, cargar etapas automáticamente
+  if (nuevo.process_type_id && casoCreado) {
+    // Buscar la plantilla del proceso
+    const { data: template } = await supabase
+      .from('process_templates')
+      .select('id')
+      .eq('process_type_id', nuevo.process_type_id)
+      .single()
+
+    if (template) {
+      // Cargar etapas de la plantilla
+      const { data: etapas } = await supabase
+        .from('template_stages')
+        .select('*')
+        .eq('template_id', template.id)
+        .order('orden')
+
+      if (etapas && etapas.length > 0) {
+        const etapasACrgar = etapas.map(e => ({
+          case_id: casoCreado.id,
+          template_stage_id: e.id,
+          nombre: e.nombre,
+          notas: e.descripcion,
+          orden: e.orden,
+          estado: 'pendiente'
+        }))
+        await supabase.from('case_stages').insert(etapasACrgar)
+      }
+    }
   }
+
+  setModalOpen(false)
+  setNuevo({ titulo: '', descripcion: '', numero_radicado: '', ciudad: '', status: 'activo', client_id: '', process_type_id: '' })
+  fetchCasos()
+
 }
 
   const casosFiltrados = casos.filter(c =>
@@ -126,6 +175,26 @@ export default function Casos({ session }) {
               </select>
               <input style={styles.input} placeholder="Número de radicado" value={nuevo.numero_radicado} onChange={e => setNuevo({ ...nuevo, numero_radicado: e.target.value })} />
               <input style={styles.input} placeholder="Ciudad" value={nuevo.ciudad} onChange={e => setNuevo({ ...nuevo, ciudad: e.target.value })} />
+              <select 
+                style={styles.input} 
+                value={nuevo.process_type_id || ''} 
+                onChange={e => setNuevo({ ...nuevo, process_type_id: e.target.value })}
+              >
+                <option value="">Seleccionar tipo de proceso</option>
+                {Object.entries(
+                  procesosTypes.reduce((acc, p) => {
+                    if (!acc[p.modulo]) acc[p.modulo] = []
+                    acc[p.modulo].push(p)
+                    return acc
+                  }, {})
+                ).map(([modulo, procesos]) => (
+                  <optgroup key={modulo} label={modulo}>
+                    {procesos.map(p => (
+                      <option key={p.id} value={p.id}>{p.nombre}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
               <select style={styles.input} value={nuevo.status} onChange={e => setNuevo({ ...nuevo, status: e.target.value })}>
                 <option value="activo">Activo</option>
                 <option value="en_proceso">En proceso</option>

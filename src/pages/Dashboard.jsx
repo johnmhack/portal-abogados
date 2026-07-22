@@ -5,6 +5,7 @@ import Clientes from './Clientes'
 import Documentos from './Documentos'
 import Audiencias from './Audiencias'
 import Mensajes from './Mensajes'
+import logo from '../assets/LOGO_RUBY_RAMOS_SIMBOLO.svg'
 import {
   LayoutDashboard, Briefcase, Users, FileText,
   Calendar, MessageSquare, LogOut, Menu, X,
@@ -21,7 +22,7 @@ export default function Dashboard({ session }) {
     { id: 'clientes', label: 'Clientes', icon: Users },
     { id: 'documentos', label: 'Documentos', icon: FileText },
     { id: 'audiencias', label: 'Audiencias', icon: Calendar },
-    { id: 'mensajes', label: 'Mensajes', icon: MessageSquare },
+    { id: 'mensajes', label: 'Mensajes', icon: MessageSquare, disabled: true },
   ]
 
   const [stats, setStats] = useState([
@@ -57,16 +58,15 @@ const fetchCasosRecientes = async () => {
       {/* SIDEBAR */}
       <div style={{ ...styles.sidebar, width: sidebarOpen ? '260px' : '70px' }}>
         <div style={styles.sidebarHeader}>
-          {sidebarOpen && (
-            <div>
-              <h2 style={styles.sidebarTitle}>SAR</h2>
-              <p style={styles.sidebarSubtitle}>Abogados</p>
-            </div>
-          )}
-          <button style={styles.menuBtn} onClick={() => setSidebarOpen(!sidebarOpen)}>
-            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
+  {sidebarOpen && (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <img src={logo} alt="SAR" style={{ height: '40px', width: 'auto' }} />
+    </div>
+  )}
+  <button style={styles.menuBtn} onClick={() => setSidebarOpen(!sidebarOpen)}>
+    {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+  </button>
+</div>
 
         <nav style={styles.nav}>
           {menuItems.map(item => {
@@ -78,8 +78,10 @@ const fetchCasosRecientes = async () => {
                   ...styles.navItem,
                   backgroundColor: activePage === item.id ? 'rgba(201,168,76,0.15)' : 'transparent',
                   borderLeft: activePage === item.id ? '3px solid #c9a84c' : '3px solid transparent',
+                  opacity: item.disabled ? 0.4 : 1,
+                  cursor: item.disabled ? 'not-allowed' : 'pointer',
                 }}
-                onClick={() => setActivePage(item.id)}
+                onClick={() => !item.disabled && setActivePage(item.id)}
               >
                 <Icon size={20} color={activePage === item.id ? '#c9a84c' : '#a0aec0'} />
                 {sidebarOpen && (

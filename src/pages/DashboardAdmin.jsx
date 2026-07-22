@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import logo from '../assets/LOGO_RUBY_RAMOS_SIMBOLO.svg'
 import {
   LayoutDashboard, Briefcase, Users, UserCheck,
   LogOut, Menu, X, Plus, CheckCircle, AlertCircle, Calendar
@@ -22,11 +23,10 @@ export default function DashboardAdmin({ session, userProfile }) {
       <div style={{ ...styles.sidebar, width: sidebarOpen ? '260px' : '70px' }}>
         <div style={styles.sidebarHeader}>
           {sidebarOpen && (
-            <div>
-              <h2 style={styles.sidebarTitle}>SAR</h2>
-              <p style={styles.sidebarSubtitle}>Admin Panel</p>
-            </div>
-          )}
+  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+    <img src={logo} alt="SAR" style={{ height: '40px', width: 'auto' }} />
+  </div>
+)}
           <button style={styles.menuBtn} onClick={() => setSidebarOpen(!sidebarOpen)}>
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -357,6 +357,29 @@ function AdminClientes() {
     setClientes(data || [])
   }
 
+  const crearAccesoCliente = async (cliente) => {
+    if (!cliente.correo) { alert('❌ El cliente no tiene correo registrado.'); return }
+    if (!window.confirm(`¿Crear acceso para ${cliente.nombre} ${cliente.apellido || ''}?`)) return
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({ nombre: cliente.nombre, apellido: cliente.apellido || '', email: cliente.correo, telefono: cliente.telefono || '', rol: 'cliente', client_id: cliente.id })
+        }
+      )
+      const data = await response.json()
+      if (!response.ok || data.error) {
+        alert(data.error?.includes('already') ? '⚠️ Este cliente ya tiene acceso.' : '❌ Error: ' + data.error)
+        return
+      }
+      alert(`✅ Acceso creado!\n\nCorreo: ${cliente.correo}\nContraseña: Temporal123!`)
+    } catch (e) {
+      alert('❌ Error: ' + e.message)
+    }
+  }
+
   const clientesFiltrados = clientes.filter(c =>
     `${c.nombre} ${c.apellido}`.toLowerCase().includes(busqueda.toLowerCase()) ||
     c.correo?.toLowerCase().includes(busqueda.toLowerCase())
@@ -372,7 +395,15 @@ function AdminClientes() {
             <p style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a2e' }}>{c.nombre} {c.apellido}</p>
             <p style={{ fontSize: '13px', color: '#b2bec3' }}>{c.correo} {c.telefono ? `· ${c.telefono}` : ''}</p>
           </div>
-          <span style={{ ...styles.badge, backgroundColor: '#f0f2f5', color: '#636e72' }}>{c.tipo_persona}</span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span style={{ ...styles.badge, backgroundColor: '#f0f2f5', color: '#636e72' }}>{c.tipo_persona}</span>
+            <button
+              style={{ backgroundColor: '#1A474F', color: '#CFB27E', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '12px' }}
+              onClick={() => crearAccesoCliente(c)}
+            >
+              🔑 Crear acceso
+            </button>
+          </div>
         </div>
       ))}
     </div>

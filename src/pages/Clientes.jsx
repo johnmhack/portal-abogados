@@ -7,6 +7,8 @@ export default function Clientes() {
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const [modalEditar, setModalEditar] = useState(false)
+  const [clienteEditar, setClienteEditar] = useState(null)
   const [nuevo, setNuevo] = useState({
     nombre: '', apellido: '', documento: '',
     correo: '', telefono: '', direccion: '',
@@ -22,21 +24,113 @@ export default function Clientes() {
   }
 
   const crearCliente = async () => {
-    if (!nuevo.nombre) return
-    const { error } = await supabase.from('clients').insert([nuevo])
-    if (!error) {
-      setModalOpen(false)
-      setNuevo({ nombre: '', apellido: '', documento: '', correo: '', telefono: '', direccion: '', ciudad: '', tipo_persona: 'natural' })
-      fetchClientes()
+  if (!nuevo.nombre) return
+
+  const { data: clienteCreado, error } = await supabase
+    .from('clients')
+    .insert([{
+      nombre: nuevo.nombre,
+      apellido: nuevo.apellido,
+      documento: nuevo.documento,
+      correo: nuevo.correo,
+      telefono: nuevo.telefono,
+      ciudad: nuevo.ciudad,
+      direccion: nuevo.direccion,
+      tipo_persona: nuevo.tipo_persona
+    }])
+    .select()
+    .single()
+
+  if (error) { console.log(error); return }
+
+  if (nuevo.crearAcceso && nuevo.correo && clienteCreado) {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({
+            nombre: clienteCreado.nombre,
+            apellido: clienteCreado.apellido || '',
+            email: clienteCreado.correo,
+            telefono: clienteCreado.telefono || '',
+            rol: 'cliente',
+            client_id: clienteCreado.id
+          })
+        }
+      )
+      const data = await response.json()
+      if (data.error) {
+        alert('Cliente creado pero error al crear acceso: ' + data.error)
+      } else {
+        alert(`✅ Cliente creado con acceso al portal!\n\nCorreo: ${clienteCreado.correo}\nContraseña: Temporal123!`)
+      }
+    } catch (e) {
+      alert('Cliente creado pero error: ' + e.message)
     }
   }
 
-  const clientesFiltrados = clientes.filter(c =>
-    `${c.nombre} ${c.apellido}`.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.correo?.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.documento?.toLowerCase().includes(busqueda.toLowerCase())
-  )
+  setModalOpen(false)
+  setNuevo({ nombre: '', apellido: '', documento: '', correo: '', telefono: '', direccion: '', ciudad: '', tipo_persona: 'natural', crearAcceso: false })
+  fetchClientes()
+}
 
+const clientesFiltrados = clientes.filter(c =>
+  `${c.nombre} ${c.apellido}`.toLowerCase().includes(busqueda.toLowerCase()) ||
+  c.correo?.toLowerCase().includes(busqueda.toLowerCase()) ||
+  c.documento?.toLowerCase().includes(busqueda.toLowerCase())
+  )
+  
+const editarCliente = async () => {
+  if (!clienteEditar.nombre) return
+  const { error } = await supabase
+    .from('clients')
+    .update({
+      nombre: clienteEditar.nombre,
+      apellido: clienteEditar.apellido,
+      documento: clienteEditar.documento,
+      correo: clienteEditar.correo,
+      telefono: clienteEditar.telefono,
+      ciudad: clienteEditar.ciudad,
+      direccion: clienteEditar.direccion,
+      tipo_persona: clienteEditar.tipo_persona
+    })
+    .eq('id', clienteEditar.id)
+  if (!error) {
+    setModalEditar(false)
+    setClienteEditar(null)
+    fetchClientes()
+  }
+}  
+
+{modalEditar && clienteEditar && (
+  <div style={styles.overlay}>
+    <div style={styles.modal}>
+      <div style={styles.modalHeader}>
+        <h3>Editar Cliente</h3>
+        <button style={styles.closeBtn} onClick={() => setModalEditar(false)}><X size={20} /></button>
+      </div>
+      <div style={styles.form}>
+        <select style={styles.input} value={clienteEditar.tipo_persona} onChange={e => setClienteEditar({ ...clienteEditar, tipo_persona: e.target.value })}>
+          <option value="natural">Persona Natural</option>
+          <option value="juridica">Persona Jurídica</option>
+        </select>
+        <div style={styles.row}>
+          <input style={styles.input} placeholder="Nombre *" value={clienteEditar.nombre || ''} onChange={e => setClienteEditar({ ...clienteEditar, nombre: e.target.value })} />
+          <input style={styles.input} placeholder="Apellido" value={clienteEditar.apellido || ''} onChange={e => setClienteEditar({ ...clienteEditar, apellido: e.target.value })} />
+        </div>
+        <input style={styles.input} placeholder="Documento (CC/NIT)" value={clienteEditar.documento || ''} onChange={e => setClienteEditar({ ...clienteEditar, documento: e.target.value })} />
+        <input style={styles.input} placeholder="Correo" type="email" value={clienteEditar.correo || ''} onChange={e => setClienteEditar({ ...clienteEditar, correo: e.target.value })} />
+        <input style={styles.input} placeholder="Teléfono" value={clienteEditar.telefono || ''} onChange={e => setClienteEditar({ ...clienteEditar, telefono: e.target.value })} />
+        <input style={styles.input} placeholder="Ciudad" value={clienteEditar.ciudad || ''} onChange={e => setClienteEditar({ ...clienteEditar, ciudad: e.target.value })} />
+        <input style={styles.input} placeholder="Dirección" value={clienteEditar.direccion || ''} onChange={e => setClienteEditar({ ...clienteEditar, direccion: e.target.value })} />
+        <button style={styles.btnGuardar} onClick={editarCliente}>Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+)}
+  
   return (
     <div>
       <div style={styles.header}>
@@ -65,29 +159,37 @@ export default function Clientes() {
         <div style={styles.grid}>
           {clientesFiltrados.map(cliente => (
             <div key={cliente.id} style={styles.card}>
-              <div style={styles.avatar}>
-                {cliente.nombre[0]}{cliente.apellido?.[0]}
-              </div>
-              <div style={styles.cardInfo}>
-                <h3 style={styles.cardName}>{cliente.nombre} {cliente.apellido}</h3>
-                {cliente.documento && <p style={styles.cardDoc}>CC: {cliente.documento}</p>}
-                {cliente.correo && (
-                  <div style={styles.cardDetail}>
-                    <Mail size={13} color="#b2bec3" />
-                    <span style={styles.cardText}>{cliente.correo}</span>
-                  </div>
-                )}
-                {cliente.telefono && (
-                  <div style={styles.cardDetail}>
-                    <Phone size={13} color="#b2bec3" />
-                    <span style={styles.cardText}>{cliente.telefono}</span>
-                  </div>
-                )}
-              </div>
+            <div style={styles.avatar}>
+              {cliente.nombre[0]}{cliente.apellido?.[0]}
+            </div>
+            <div style={styles.cardInfo}>
+              <h3 style={styles.cardName}>{cliente.nombre} {cliente.apellido}</h3>
+              {cliente.documento && <p style={styles.cardDoc}>CC: {cliente.documento}</p>}
+              {cliente.correo && (
+                <div style={styles.cardDetail}>
+                  <Mail size={13} color="#b2bec3" />
+                  <span style={styles.cardText}>{cliente.correo}</span>
+                </div>
+              )}
+              {cliente.telefono && (
+                <div style={styles.cardDetail}>
+                  <Phone size={13} color="#b2bec3" />
+                  <span style={styles.cardText}>{cliente.telefono}</span>
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
               <span style={{ ...styles.badge, backgroundColor: cliente.tipo_persona === 'juridica' ? '#0984e320' : '#00b89420', color: cliente.tipo_persona === 'juridica' ? '#0984e3' : '#00b894' }}>
                 {cliente.tipo_persona}
-              </span>
+                </span>
+                <button
+                  style={styles.btnEditar}
+                  onClick={() => { setClienteEditar(cliente); setModalEditar(true) }}
+                >
+                  ✏️
+                </button>
             </div>
+          </div>
           ))}
         </div>
       )}
@@ -108,6 +210,19 @@ export default function Clientes() {
                 <input style={styles.input} placeholder="Nombre *" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} />
                 <input style={styles.input} placeholder="Apellido" value={nuevo.apellido} onChange={e => setNuevo({ ...nuevo, apellido: e.target.value })} />
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  id="crearAcceso"
+                  checked={nuevo.crearAcceso || false}
+                  onChange={e => setNuevo({ ...nuevo, crearAcceso: e.target.checked })}
+                  style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                />
+                <label htmlFor="crearAcceso" style={{ fontSize: '13px', color: '#636e72', cursor: 'pointer' }}>
+                  Crear acceso al portal para este cliente
+                </label>
+              </div>
+
               <input style={styles.input} placeholder="Documento (CC/NIT)" value={nuevo.documento} onChange={e => setNuevo({ ...nuevo, documento: e.target.value })} />
               <input style={styles.input} placeholder="Correo" type="email" value={nuevo.correo} onChange={e => setNuevo({ ...nuevo, correo: e.target.value })} />
               <input style={styles.input} placeholder="Teléfono" value={nuevo.telefono} onChange={e => setNuevo({ ...nuevo, telefono: e.target.value })} />
@@ -144,5 +259,6 @@ const styles = {
   form: { display: 'flex', flexDirection: 'column', gap: '12px' },
   row: { display: 'flex', gap: '12px' },
   input: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9', fontSize: '14px', outline: 'none', width: '100%' },
-  btnGuardar: { backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' }
+  btnGuardar: { backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' },
+  btnEditar: { background: 'none', border: '1px solid #dfe6e9', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '14px' },
 }
