@@ -1,22 +1,67 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { ArrowLeft, FileText, MessageSquare, Calendar, Plus, X, TrendingUp, CheckSquare } from 'lucide-react'
+import { ArrowLeft, FileText, MessageSquare, Plus, X, TrendingUp, CheckSquare, Pencil, Eye, Download } from 'lucide-react'
 import InformeCliente from './InformeCliente'
 
 export default function DetalleCaso({ casoId, onBack }) {
   const [caso, setCaso] = useState(null)
   const [tab, setTab] = useState('eventos')
   const [mostrarInforme, setMostrarInforme] = useState(false)
+  const [modalEditar, setModalEditar] = useState(false)
+  const [clientes, setClientes] = useState([])
+  const [editCaso, setEditCaso] = useState({})
+  const [editCliente, setEditCliente] = useState({})
+  const [guardando, setGuardando] = useState(false)
 
   useEffect(() => { fetchCaso() }, [casoId])
 
   const fetchCaso = async () => {
     const { data } = await supabase
       .from('cases')
-      .select('*, clients(nombre, apellido, correo, telefono)')
+      .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion)')
       .eq('id', casoId)
       .single()
     setCaso(data)
+  }
+
+  const abrirEditar = async () => {
+    const { data } = await supabase.from('clients').select('id, nombre, apellido').order('nombre')
+    setClientes(data || [])
+    setEditCaso({
+      titulo: caso.titulo || '',
+      descripcion: caso.descripcion || '',
+      numero_radicado: caso.numero_radicado || '',
+      ciudad: caso.ciudad || '',
+      status: caso.status || 'activo',
+      client_id: caso.client_id || ''
+    })
+    setEditCliente({
+      nombre: caso.clients?.nombre || '',
+      apellido: caso.clients?.apellido || '',
+      correo: caso.clients?.correo || '',
+      telefono: caso.clients?.telefono || '',
+      documento: caso.clients?.documento || '',
+      ciudad: caso.clients?.ciudad || '',
+      direccion: caso.clients?.direccion || ''
+    })
+    setModalEditar(true)
+  }
+
+  const guardarEdicion = async () => {
+    if (!editCaso.titulo.trim()) return
+    setGuardando(true)
+    const casoUpdate = { ...editCaso }
+    if (!casoUpdate.client_id) casoUpdate.client_id = null
+    await supabase.from('cases').update(casoUpdate).eq('id', casoId)
+    if (caso.client_id || editCaso.client_id) {
+      const clientId = editCaso.client_id || caso.client_id
+      if (clientId && editCliente.nombre.trim()) {
+        await supabase.from('clients').update(editCliente).eq('id', clientId)
+      }
+    }
+    setGuardando(false)
+    setModalEditar(false)
+    fetchCaso()
   }
 
   const statusColor = {
@@ -28,14 +73,19 @@ export default function DetalleCaso({ casoId, onBack }) {
 
   return (
     <div>
-      {/* BACK + INFORME */}
+      {/* BACK + ACCIONES */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <button style={styles.backBtn} onClick={onBack}>
           <ArrowLeft size={18} /> Volver a Casos
         </button>
-        <button style={styles.btnInforme} onClick={() => setMostrarInforme(true)}>
-          📊 Generar Informe
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button style={styles.btnEditar} onClick={abrirEditar}>
+            <Pencil size={16} /> Editar caso
+          </button>
+          <button style={styles.btnInforme} onClick={() => setMostrarInforme(true)}>
+            📊 Generar Informe
+          </button>
+        </div>
       </div>
 
       {mostrarInforme && <InformeCliente casoId={casoId} onClose={() => setMostrarInforme(false)} />}
@@ -67,6 +117,80 @@ export default function DetalleCaso({ casoId, onBack }) {
           </div>
         </div>
       </div>
+
+      {modalEditar && (
+        <div style={styles.overlay}>
+          <div style={{ ...styles.modal, maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={styles.modalHeader}>
+              <h3>Editar caso</h3>
+              <button style={styles.closeBtn} onClick={() => setModalEditar(false)}><X size={20} /></button>
+            </div>
+            <div style={styles.form}>
+              <p style={styles.sectionLabel}>Datos del caso</p>
+              <input style={styles.input} placeholder="Título *" value={editCaso.titulo} onChange={e => setEditCaso({ ...editCaso, titulo: e.target.value })} />
+              <textarea style={{ ...styles.input, height: '80px', resize: 'none' }} placeholder="Descripción" value={editCaso.descripcion} onChange={e => setEditCaso({ ...editCaso, descripcion: e.target.value })} />
+              <select
+                style={styles.input}
+                value={editCaso.client_id}
+                onChange={async e => {
+                  const clientId = e.target.value
+                  setEditCaso({ ...editCaso, client_id: clientId })
+                  if (!clientId) {
+                    setEditCliente({ nombre: '', apellido: '', correo: '', telefono: '', documento: '', ciudad: '', direccion: '' })
+                    return
+                  }
+                  const { data } = await supabase.from('clients').select('*').eq('id', clientId).single()
+                  if (data) {
+                    setEditCliente({
+                      nombre: data.nombre || '',
+                      apellido: data.apellido || '',
+                      correo: data.correo || '',
+                      telefono: data.telefono || '',
+                      documento: data.documento || '',
+                      ciudad: data.ciudad || '',
+                      direccion: data.direccion || ''
+                    })
+                  }
+                }}
+              >
+                <option value="">Sin cliente</option>
+                {clientes.map(c => (
+                  <option key={c.id} value={c.id}>{c.nombre} {c.apellido || ''}</option>
+                ))}
+              </select>
+              <input style={styles.input} placeholder="Número de radicado" value={editCaso.numero_radicado} onChange={e => setEditCaso({ ...editCaso, numero_radicado: e.target.value })} />
+              <input style={styles.input} placeholder="Ciudad" value={editCaso.ciudad} onChange={e => setEditCaso({ ...editCaso, ciudad: e.target.value })} />
+              <select style={styles.input} value={editCaso.status} onChange={e => setEditCaso({ ...editCaso, status: e.target.value })}>
+                <option value="activo">Activo</option>
+                <option value="en_proceso">En proceso</option>
+                <option value="audiencia">Audiencia</option>
+                <option value="cerrado">Cerrado</option>
+                <option value="ganado">Ganado</option>
+                <option value="perdido">Perdido</option>
+              </select>
+
+              {(editCaso.client_id || caso.client_id) && (
+                <>
+                  <p style={styles.sectionLabel}>Info del cliente</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <input style={styles.input} placeholder="Nombre" value={editCliente.nombre} onChange={e => setEditCliente({ ...editCliente, nombre: e.target.value })} />
+                    <input style={styles.input} placeholder="Apellido" value={editCliente.apellido} onChange={e => setEditCliente({ ...editCliente, apellido: e.target.value })} />
+                  </div>
+                  <input style={styles.input} placeholder="Documento" value={editCliente.documento} onChange={e => setEditCliente({ ...editCliente, documento: e.target.value })} />
+                  <input style={styles.input} placeholder="Correo" value={editCliente.correo} onChange={e => setEditCliente({ ...editCliente, correo: e.target.value })} />
+                  <input style={styles.input} placeholder="Teléfono" value={editCliente.telefono} onChange={e => setEditCliente({ ...editCliente, telefono: e.target.value })} />
+                  <input style={styles.input} placeholder="Ciudad" value={editCliente.ciudad} onChange={e => setEditCliente({ ...editCliente, ciudad: e.target.value })} />
+                  <input style={styles.input} placeholder="Dirección" value={editCliente.direccion} onChange={e => setEditCliente({ ...editCliente, direccion: e.target.value })} />
+                </>
+              )}
+
+              <button style={styles.btnGuardar} onClick={guardarEdicion} disabled={guardando}>
+                {guardando ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TABS */}
       <div style={styles.tabs}>
@@ -289,8 +413,10 @@ function TareasTab({ casoId }) {
 function DocumentosTab({ casoId }) {
   const [documentos, setDocumentos] = useState([])
   const [subiendo, setSubiendo] = useState(false)
+  const [vista, setVista] = useState(null)
 
   useEffect(() => { fetchDocumentos() }, [casoId])
+  useEffect(() => () => { if (vista?.url) URL.revokeObjectURL(vista.url) }, [vista])
 
   const fetchDocumentos = async () => {
     const { data } = await supabase.from('documents').select('*').eq('case_id', casoId)
@@ -310,16 +436,36 @@ function DocumentosTab({ casoId }) {
     setSubiendo(false)
   }
 
-  const descargar = async (doc) => {
+  const obtenerBlobUrl = async (doc) => {
     const { data } = await supabase.storage.from('documentos').download(doc.url)
-    if (data) {
-      const url = URL.createObjectURL(data)
+    if (!data) return null
+    return URL.createObjectURL(data)
+  }
+
+  const descargar = async (doc) => {
+    const url = await obtenerBlobUrl(doc)
+    if (url) {
       const a = document.createElement('a')
       a.href = url
       a.download = doc.nombre
       a.click()
+      URL.revokeObjectURL(url)
     }
   }
+
+  const visualizar = async (doc) => {
+    if (vista?.url) URL.revokeObjectURL(vista.url)
+    const url = await obtenerBlobUrl(doc)
+    if (url) setVista({ ...doc, url })
+  }
+
+  const cerrarVista = () => {
+    if (vista?.url) URL.revokeObjectURL(vista.url)
+    setVista(null)
+  }
+
+  const esImagen = (tipo) => tipo?.startsWith('image/')
+  const esPdf = (tipo, nombre) => tipo?.includes('pdf') || nombre?.toLowerCase().endsWith('.pdf')
 
   return (
     <div style={styles.tabContent}>
@@ -333,9 +479,31 @@ function DocumentosTab({ casoId }) {
         documentos.map(doc => (
           <div key={doc.id} style={styles.docCard}>
             <span style={{ fontSize: '14px', color: '#2d3436' }}>📄 {doc.nombre}</span>
-            <button style={styles.btnDescargar} onClick={() => descargar(doc)}>Descargar</button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button style={styles.btnVer} onClick={() => visualizar(doc)}><Eye size={14} /> Ver</button>
+              <button style={styles.btnDescargar} onClick={() => descargar(doc)}><Download size={14} /> Descargar</button>
+            </div>
           </div>
         ))
+      )}
+
+      {vista && (
+        <div style={styles.viewerBox}>
+          <div style={styles.viewerHeader}>
+            <span style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a2e' }}>{vista.nombre}</span>
+            <button style={styles.closeBtn} onClick={cerrarVista}><X size={18} /></button>
+          </div>
+          {esImagen(vista.tipo_documento) ? (
+            <img src={vista.url} alt={vista.nombre} style={styles.viewerImg} />
+          ) : esPdf(vista.tipo_documento, vista.nombre) ? (
+            <iframe src={vista.url} title={vista.nombre} style={styles.viewerFrame} />
+          ) : (
+            <div style={styles.viewerFallback}>
+              <p style={{ color: '#636e72', marginBottom: '12px' }}>Vista previa no disponible para este tipo de archivo.</p>
+              <button style={styles.btnDescargar} onClick={() => descargar(vista)}>Descargar archivo</button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
@@ -343,6 +511,7 @@ function DocumentosTab({ casoId }) {
 
 const styles = {
   backBtn: { display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#636e72', fontSize: '14px' },
+  btnEditar: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#fff', color: '#1a1a2e', border: '1px solid #dfe6e9', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
   btnInforme: { backgroundColor: '#c9a84c', color: '#1a1a2e', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
   casoHeader: { backgroundColor: '#fff', borderRadius: '12px', padding: '24px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px' },
   headerTop: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' },
@@ -354,6 +523,7 @@ const styles = {
   metaItem: { display: 'flex', flexDirection: 'column', gap: '4px' },
   metaLabel: { fontSize: '11px', color: '#b2bec3', textTransform: 'uppercase' },
   metaValue: { fontSize: '14px', fontWeight: '600', color: '#1a1a2e' },
+  sectionLabel: { fontSize: '12px', fontWeight: '700', color: '#b2bec3', textTransform: 'uppercase', margin: '8px 0 0' },
   tabs: { display: 'flex', gap: '4px', backgroundColor: '#fff', borderRadius: '12px', padding: '4px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   tab: { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: 'none', border: 'none', borderBottom: '2px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: '500' },
   tabContent: { backgroundColor: '#fff', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
@@ -372,12 +542,18 @@ const styles = {
   tareaCard: { display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '12px 16px', marginBottom: '8px' },
   btnSubir: { display: 'inline-block', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', marginBottom: '16px' },
   docCard: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '14px 16px', marginBottom: '10px' },
-  btnDescargar: { backgroundColor: '#0984e320', color: '#0984e3', border: 'none', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
+  btnVer: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#c9a84c20', color: '#c9a84c', border: 'none', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
+  btnDescargar: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#0984e320', color: '#0984e3', border: 'none', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
+  viewerBox: { marginTop: '16px', border: '1px solid #dfe6e9', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#f8f9fa' },
+  viewerHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#fff', borderBottom: '1px solid #dfe6e9' },
+  viewerImg: { display: 'block', maxWidth: '100%', maxHeight: '70vh', margin: '0 auto', padding: '16px' },
+  viewerFrame: { width: '100%', height: '70vh', border: 'none', backgroundColor: '#fff' },
+  viewerFallback: { padding: '40px', textAlign: 'center' },
   overlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 },
   modal: { backgroundColor: '#fff', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '480px' },
   modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
   closeBtn: { background: 'none', border: 'none', cursor: 'pointer' },
   form: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  input: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9', fontSize: '14px', outline: 'none', width: '100%' },
+  input: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9', fontSize: '14px', outline: 'none', width: '100%', boxSizing: 'border-box' },
   btnGuardar: { backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' },
 }
