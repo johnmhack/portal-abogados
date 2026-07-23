@@ -233,6 +233,32 @@ const editarCliente = async () => {
           </div>
         </div>
       )}
+      {modalEditar && clienteEditar && (
+        <div style={styles.overlay}>
+          <div style={styles.modal}>
+            <div style={styles.modalHeader}>
+              <h3>Editar Cliente</h3>
+              <button style={styles.closeBtn} onClick={() => setModalEditar(false)}><X size={20} /></button>
+            </div>
+            <div style={styles.form}>
+              <select style={styles.input} value={clienteEditar.tipo_persona} onChange={e => setClienteEditar({ ...clienteEditar, tipo_persona: e.target.value })}>
+                <option value="natural">Persona Natural</option>
+                <option value="juridica">Persona Jurídica</option>
+              </select>
+              <div style={styles.row}>
+                <input style={styles.input} placeholder="Nombre *" value={clienteEditar.nombre || ''} onChange={e => setClienteEditar({ ...clienteEditar, nombre: e.target.value })} />
+                <input style={styles.input} placeholder="Apellido" value={clienteEditar.apellido || ''} onChange={e => setClienteEditar({ ...clienteEditar, apellido: e.target.value })} />
+              </div>
+              <input style={styles.input} placeholder="Documento (CC/NIT)" value={clienteEditar.documento || ''} onChange={e => setClienteEditar({ ...clienteEditar, documento: e.target.value })} />
+              <input style={styles.input} placeholder="Correo" type="email" value={clienteEditar.correo || ''} onChange={e => setClienteEditar({ ...clienteEditar, correo: e.target.value })} />
+              <input style={styles.input} placeholder="Teléfono" value={clienteEditar.telefono || ''} onChange={e => setClienteEditar({ ...clienteEditar, telefono: e.target.value })} />
+              <input style={styles.input} placeholder="Ciudad" value={clienteEditar.ciudad || ''} onChange={e => setClienteEditar({ ...clienteEditar, ciudad: e.target.value })} />
+              <input style={styles.input} placeholder="Dirección" value={clienteEditar.direccion || ''} onChange={e => setClienteEditar({ ...clienteEditar, direccion: e.target.value })} />
+              <button style={styles.btnGuardar} onClick={editarCliente}>Guardar Cambios</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

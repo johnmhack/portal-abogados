@@ -19,8 +19,10 @@ function App() {
 
     supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
-      if (session) fetchProfile(session.user.id)
-      else {
+      if (session) {
+        setLoading(true)
+        fetchProfile(session.user.id)
+      } else {
         setUserProfile(null)
         setLoading(false)
       }
@@ -28,6 +30,7 @@ function App() {
   }, [])
 
   const fetchProfile = async (authId) => {
+    setLoading(true)
     const { data } = await supabase
       .from('users')
       .select('*')
