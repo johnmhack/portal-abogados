@@ -177,13 +177,13 @@ const fetchCasosRecientes = async () => {
                 {stats.map((stat, i) => {
                   const Icon = stat.icon
                   return (
-                    <div key={i} style={styles.statCard}>
+                    <div key={i} style={{ ...styles.statCard, borderTop: `3px solid ${stat.color}` }}>
                       <div style={styles.statInfo}>
                         <p style={styles.statLabel}>{stat.label}</p>
                         <h2 style={styles.statValue}>{stat.value}</h2>
                       </div>
-                      <div style={{ ...styles.statIcon, backgroundColor: stat.color + '20' }}>
-                        <Icon size={28} color={stat.color} />
+                      <div style={{ ...styles.statIcon, backgroundColor: stat.color + '18' }}>
+                        <Icon size={22} color={stat.color} />
                       </div>
                     </div>
                   )
@@ -206,25 +206,48 @@ const fetchCasosRecientes = async () => {
 
               {/* RECENT */}
               <div style={styles.recentCard}>
-                <h3 style={styles.recentTitle}>Casos Recientes</h3>
+                <div style={styles.recentHeader}>
+                  <div>
+                    <h3 style={styles.recentTitle}>Casos recientes</h3>
+                    <p style={styles.recentSubtitle}>Últimos movimientos del despacho</p>
+                  </div>
+                  <button style={styles.recentLink} onClick={() => setActivePage('casos')}>
+                    Ver todos
+                  </button>
+                </div>
                 {casosRecientes.length === 0 ? (
                   <div style={styles.emptyState}>
                     <Briefcase size={40} color="#dfe6e9" />
                     <p style={{ color: '#b2bec3', marginTop: '12px' }}>No hay casos aún</p>
                   </div>
-                ) : (  
-                  casosRecientes.map(caso => (  
-                    <div key={caso.id} style={styles.casoRow}>
-                      <div>
-                        <p style={styles.casoTitulo}>{caso.titulo}</p>
-                        <p style={styles.casoCliente}>{caso.clients ? `${caso.clients.nombre} ${caso.clients.apellido || ''}` : 'Sin cliente'}</p>
-                      </div>
-                      <span style={{ ...styles.casoBadge, backgroundColor: caso.status === 'ganado' ? '#00b89420' : caso.status === 'activo' ? '#0984e320' : '#c9a84c20', color: caso.status === 'ganado' ? '#00b894' : caso.status === 'activo' ? '#0984e3' : '#c9a84c' }}>
-                        {caso.status?.replace('_', ' ')}
-                      </span>
-                    </div>
-                  ))
-                )}    
+                ) : (
+                  <div style={styles.casosLista}>
+                    {casosRecientes.map(caso => {
+                      const statusColor = caso.status === 'ganado' ? '#00b894'
+                        : caso.status === 'activo' ? '#0984e3'
+                        : caso.status === 'perdido' ? '#d63031'
+                        : '#c9a84c'
+                      return (
+                        <div key={caso.id} style={styles.casoRow}>
+                          <div style={{ ...styles.casoDot, backgroundColor: statusColor }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={styles.casoTitulo}>{caso.titulo}</p>
+                            <p style={styles.casoCliente}>
+                              {caso.clients ? `${caso.clients.nombre} ${caso.clients.apellido || ''}` : 'Sin cliente'}
+                            </p>
+                          </div>
+                          <span style={{
+                            ...styles.casoBadge,
+                            backgroundColor: statusColor + '18',
+                            color: statusColor,
+                          }}>
+                            {caso.status?.replace('_', ' ')}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -387,18 +410,44 @@ const styles = {
   content: { padding: '32px' },
   statsGrid: {
     display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: '20px', marginBottom: '24px'
+    gap: '16px', marginBottom: '24px'
   },
   statCard: {
-    backgroundColor: '#ffffff', borderRadius: '12px',
-    padding: '20px', display: 'flex',
-    justifyContent: 'space-between', alignItems: 'center',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+    backgroundColor: '#ffffff',
+    borderRadius: '14px',
+    padding: '22px 20px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.06)',
+    border: '1px solid #eef0f3',
   },
-  statInfo: {},
-  statLabel: { fontSize: '13px', color: '#b2bec3', marginBottom: '6px' },
-  statValue: { fontSize: '28px', fontWeight: '700', color: '#1a1a2e' },
-  statIcon: { padding: '12px', borderRadius: '12px' },
+  statInfo: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  statLabel: {
+    fontSize: '12px',
+    color: '#8b949e',
+    margin: 0,
+    fontWeight: '600',
+    letterSpacing: '0.03em',
+    textTransform: 'uppercase',
+  },
+  statValue: {
+    fontSize: '32px',
+    fontWeight: '700',
+    color: '#1a1a2e',
+    margin: 0,
+    letterSpacing: '-0.03em',
+    lineHeight: 1,
+  },
+  statIcon: {
+    width: '48px',
+    height: '48px',
+    borderRadius: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
   welcomeCard: {
     background: 'linear-gradient(135deg, #1a1a2e 0%, #2d2d4a 100%)',
     borderRadius: '14px',
@@ -418,24 +467,88 @@ const styles = {
     backgroundColor: 'rgba(201,168,76,0.08)'
   },
   recentCard: {
-    backgroundColor: '#ffffff', borderRadius: '12px',
-    padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+    backgroundColor: '#ffffff',
+    borderRadius: '14px',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.06)',
+    border: '1px solid #eef0f3',
+    overflow: 'hidden',
   },
-  recentTitle: { fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#1a1a2e' },
+  recentHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '18px 22px',
+    backgroundColor: '#fafbfc',
+    borderBottom: '1px solid #eef0f3',
+  },
+  recentTitle: {
+    fontSize: '16px',
+    fontWeight: '700',
+    color: '#1a1a2e',
+    margin: 0,
+  },
+  recentSubtitle: {
+    fontSize: '12px',
+    color: '#b2bec3',
+    margin: '4px 0 0',
+  },
+  recentLink: {
+    background: 'none',
+    border: '1px solid #e1e4e8',
+    borderRadius: '8px',
+    padding: '8px 12px',
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#1a1a2e',
+    cursor: 'pointer',
+  },
+  casosLista: {
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
   emptyState: {
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', padding: '40px'
   },
   casoRow: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f0f2f5' 
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '14px 14px',
+    backgroundColor: '#f8f9fb',
+    borderRadius: '10px',
+    border: '1px solid #eef0f3',
+  },
+  casoDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    flexShrink: 0,
   },
   casoTitulo: {
-    fontSize: '14px', fontWeight: '600', color: '#1a1a2e', marginBottom: '2px' 
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#1a1a2e',
+    margin: '0 0 3px',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   casoCliente: {
-    fontSize: '12px', color: '#b2bec3' 
+    fontSize: '12px',
+    color: '#8b949e',
+    margin: 0,
   },
   casoBadge: {
-    padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', textTransform: 'capitalize', whiteSpace: 'nowrap' 
+    padding: '5px 10px',
+    borderRadius: '20px',
+    fontSize: '11px',
+    fontWeight: '700',
+    textTransform: 'capitalize',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
   },
 }
