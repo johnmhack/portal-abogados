@@ -16,6 +16,7 @@ import {
 export default function Dashboard({ session, userProfile }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [activePage, setActivePage] = useState('dashboard')
+  const [casoInicialId, setCasoInicialId] = useState(null)
 
   const menuItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
@@ -60,6 +61,15 @@ const fetchCasosRecientes = async () => {
   const nombreUsuario = userProfile?.nombre || session.user.email?.split('@')[0] || ''
   const isHome = activePage === 'dashboard'
   const pageLabel = menuItems.find(m => m.id === activePage)?.label
+  const pageSubtitles = {
+    casos: 'Expedientes y seguimiento',
+    clientes: 'Directorio del despacho',
+    juzgados: 'Catálogo de despachos judiciales',
+    documentos: 'Archivos del portafolio',
+    audiencias: 'Agenda y citaciones',
+    mensajes: 'Comunicaciones',
+  }
+  const pageSubtitle = pageSubtitles[activePage] || 'SAR Abogados'
   const iniciales = `${userProfile?.nombre?.[0] || session.user.email?.[0] || ''}${userProfile?.apellido?.[0] || ''}`.toUpperCase()
 
   return (
@@ -151,8 +161,10 @@ const fetchCasosRecientes = async () => {
               </>
             ) : (
               <>
+                <p style={styles.brandLine}>SAR Abogados</p>
                 <h1 style={styles.pageTitle}>{pageLabel}</h1>
-                <p style={styles.pageSubtitle}>Gestión del despacho</p>
+                <p style={styles.pageSubtitle}>{pageSubtitle}</p>
+                <div style={styles.titleAccent} />
               </>
             )}
           </div>
@@ -228,7 +240,14 @@ const fetchCasosRecientes = async () => {
                         : caso.status === 'perdido' ? '#d63031'
                         : '#c9a84c'
                       return (
-                        <div key={caso.id} style={styles.casoRow}>
+                        <div
+                          key={caso.id}
+                          style={{ ...styles.casoRow, cursor: 'pointer' }}
+                          onClick={() => {
+                            setCasoInicialId(caso.id)
+                            setActivePage('casos')
+                          }}
+                        >
                           <div style={{ ...styles.casoDot, backgroundColor: statusColor }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <p style={styles.casoTitulo}>{caso.titulo}</p>
@@ -252,7 +271,13 @@ const fetchCasosRecientes = async () => {
             </>
           )}
 
-          {activePage === 'casos' && <Casos session={session} />}
+          {activePage === 'casos' && (
+            <Casos
+              session={session}
+              casoInicialId={casoInicialId}
+              onLimpiarCasoInicial={() => setCasoInicialId(null)}
+            />
+          )}
           {activePage === 'clientes' && <Clientes session={session} />}
           {activePage === 'juzgados' && <Juzgados />}
           {activePage === 'documentos' && <Documentos />}

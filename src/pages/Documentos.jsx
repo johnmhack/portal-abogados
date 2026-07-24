@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { Search, FileText, Download, Eye, X, Trash2 } from 'lucide-react'
+import { Search, FileText, Download, Eye, X, Trash2, Image, File } from 'lucide-react'
 
 export default function Documentos() {
   const [documentos, setDocumentos] = useState([])
@@ -87,19 +87,24 @@ export default function Documentos() {
     return matchBusqueda && matchCaso && matchTipo
   })
 
-  const tipoIcono = (tipo) => {
-    if (tipo?.includes('pdf')) return '📕'
-    if (tipo?.includes('image')) return '🖼️'
-    if (tipo?.includes('word') || tipo?.includes('document')) return '📘'
-    return '📄'
+  const TipoIcon = ({ tipo }) => {
+    if (tipo?.includes('pdf')) return <FileText size={18} color="#d63031" />
+    if (tipo?.includes('image')) return <Image size={18} color="#0984e3" />
+    if (tipo?.includes('word') || tipo?.includes('document')) return <File size={18} color="#0984e3" />
+    return <FileText size={18} color="#c9a84c" />
   }
 
   return (
     <div>
       <div style={styles.filtros}>
         <div style={styles.searchBox}>
-          <Search size={16} color="#b2bec3" />
-          <input style={styles.searchInput} placeholder="Buscar documento..." value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+          <Search size={18} color="#8b949e" />
+          <input
+            style={styles.searchInput}
+            placeholder="Buscar documento..."
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+          />
         </div>
         <select style={styles.select} value={filtroCaso} onChange={e => setFiltroCaso(e.target.value)}>
           <option value="">Todos los casos</option>
@@ -116,11 +121,11 @@ export default function Documentos() {
       <div style={styles.statsRow}>
         <div style={styles.statPill}>
           <FileText size={14} color="#0984e3" />
-          <span>{documentos.length} documentos en total</span>
+          <span><strong>{documentos.length}</strong> en total</span>
         </div>
         <div style={styles.statPill}>
           <FileText size={14} color="#c9a84c" />
-          <span>{documentosFiltrados.length} resultados</span>
+          <span><strong>{documentosFiltrados.length}</strong> resultados</span>
         </div>
       </div>
 
@@ -137,24 +142,28 @@ export default function Documentos() {
             <span>Documento</span>
             <span>Caso</span>
             <span>Fecha</span>
-            <span>Acción</span>
+            <span>Acciones</span>
           </div>
           {documentosFiltrados.map(doc => (
             <div key={doc.id} style={styles.tablaFila}>
               <div style={styles.docNombre}>
-                <span style={styles.icono}>{tipoIcono(doc.tipo_documento)}</span>
-                <span>{doc.nombre}</span>
+                <div style={styles.iconWrap}>
+                  <TipoIcon tipo={doc.tipo_documento} />
+                </div>
+                <span style={styles.docTexto}>{doc.nombre}</span>
               </div>
               <span style={styles.casoTag}>{doc.cases?.titulo || '—'}</span>
-              <span style={styles.fecha}>{new Date(doc.creado_en).toLocaleDateString('es-CO')}</span>
+              <span style={styles.fecha}>
+                {doc.creado_en ? new Date(doc.creado_en).toLocaleDateString('es-CO') : '—'}
+              </span>
               <div style={styles.acciones}>
-                <button style={styles.btnVer} onClick={() => visualizar(doc)}>
+                <button style={styles.btnVer} onClick={() => visualizar(doc)} title="Ver">
                   <Eye size={14} /> Ver
                 </button>
-                <button style={styles.btnDescargar} onClick={() => descargarArchivo(doc)}>
+                <button style={styles.btnDescargar} onClick={() => descargarArchivo(doc)} title="Descargar">
                   <Download size={14} />
                 </button>
-                <button style={styles.btnEliminar} onClick={() => setDocEliminar(doc)}>
+                <button style={styles.btnEliminar} onClick={() => setDocEliminar(doc)} title="Eliminar">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -180,7 +189,7 @@ export default function Documentos() {
       {vista && (
         <div style={styles.viewerBox}>
           <div style={styles.viewerHeader}>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a2e' }}>{vista.nombre}</span>
+            <span style={styles.viewerTitle}>{vista.nombre}</span>
             <button style={styles.closeBtn} onClick={cerrarVista}><X size={18} /></button>
           </div>
           {esImagen(vista.tipo_documento) ? (
@@ -200,32 +209,212 @@ export default function Documentos() {
 }
 
 const styles = {
-  filtros: { display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' },
-  searchBox: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#fff', padding: '10px 16px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', flex: 1, minWidth: '200px' },
-  searchInput: { border: 'none', outline: 'none', fontSize: '14px', width: '100%' },
-  select: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9', fontSize: '14px', outline: 'none', backgroundColor: '#fff', cursor: 'pointer' },
-  statsRow: { display: 'flex', gap: '12px', marginBottom: '20px' },
-  statPill: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#fff', padding: '8px 16px', borderRadius: '20px', fontSize: '13px', color: '#636e72', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  empty: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px', backgroundColor: '#fff', borderRadius: '12px' },
-  tabla: { backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflow: 'hidden' },
-  tablaHeader: { display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 200px', padding: '12px 20px', backgroundColor: '#f8f9fa', fontSize: '12px', fontWeight: '600', color: '#b2bec3', textTransform: 'uppercase' },
-  tablaFila: { display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 200px', padding: '16px 20px', borderTop: '1px solid #f0f2f5', alignItems: 'center' },
-  docNombre: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#2d3436' },
-  icono: { fontSize: '18px' },
-  casoTag: { fontSize: '13px', color: '#636e72', backgroundColor: '#f0f2f5', padding: '4px 10px', borderRadius: '20px', display: 'inline-block' },
-  fecha: { fontSize: '13px', color: '#b2bec3' },
+  filtros: {
+    display: 'flex',
+    gap: '12px',
+    marginBottom: '16px',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  searchBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    backgroundColor: '#fff',
+    padding: '12px 16px',
+    borderRadius: '12px',
+    border: '1px solid #eef0f3',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.05)',
+    flex: 1,
+    minWidth: '200px',
+  },
+  searchInput: {
+    border: 'none',
+    outline: 'none',
+    fontSize: '14px',
+    width: '100%',
+    color: '#1a1a2e',
+    background: 'transparent',
+  },
+  select: {
+    padding: '12px 14px',
+    borderRadius: '12px',
+    border: '1px solid #eef0f3',
+    fontSize: '14px',
+    outline: 'none',
+    backgroundColor: '#fff',
+    cursor: 'pointer',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.05)',
+    color: '#1a1a2e',
+  },
+  statsRow: { display: 'flex', gap: '10px', marginBottom: '18px', flexWrap: 'wrap' },
+  statPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    backgroundColor: '#fff',
+    padding: '8px 14px',
+    borderRadius: '20px',
+    fontSize: '13px',
+    color: '#636e72',
+    border: '1px solid #eef0f3',
+    boxShadow: '0 2px 8px rgba(26,26,46,0.04)',
+  },
+  empty: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    padding: '60px',
+    backgroundColor: '#fff',
+    borderRadius: '14px',
+    border: '1px solid #eef0f3',
+  },
+  tabla: {
+    backgroundColor: '#fff',
+    borderRadius: '14px',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.05)',
+    border: '1px solid #eef0f3',
+    overflow: 'hidden',
+  },
+  tablaHeader: {
+    display: 'grid',
+    gridTemplateColumns: '2fr 1.5fr 1fr 200px',
+    padding: '14px 20px',
+    backgroundColor: '#fafbfc',
+    fontSize: '11px',
+    fontWeight: '700',
+    color: '#8b949e',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    borderBottom: '1px solid #eef0f3',
+  },
+  tablaFila: {
+    display: 'grid',
+    gridTemplateColumns: '2fr 1.5fr 1fr 200px',
+    padding: '14px 20px',
+    borderTop: '1px solid #f0f2f5',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  docNombre: { display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 },
+  iconWrap: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '10px',
+    backgroundColor: '#f5f6fa',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    border: '1px solid #eef0f3',
+  },
+  docTexto: {
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#1a1a2e',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  casoTag: {
+    fontSize: '12px',
+    color: '#636e72',
+    backgroundColor: '#f5f6fa',
+    padding: '5px 10px',
+    borderRadius: '20px',
+    display: 'inline-block',
+    fontWeight: '600',
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  fecha: { fontSize: '13px', color: '#8b949e', fontWeight: '500' },
   acciones: { display: 'flex', gap: '8px', alignItems: 'center' },
-  btnVer: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#c9a84c20', color: '#c9a84c', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
-  btnDescargar: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#0984e320', color: '#0984e3', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
-  btnEliminar: { display: 'flex', alignItems: 'center', backgroundColor: '#d6303120', color: '#d63031', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer' },
-  confirmBox: { marginTop: '16px', backgroundColor: '#fff5f5', border: '1px solid #fab1a0', borderRadius: '8px', padding: '14px' },
+  btnVer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    backgroundColor: '#c9a84c20',
+    color: '#c9a84c',
+    border: 'none',
+    padding: '7px 12px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: '700',
+    fontSize: '12px',
+  },
+  btnDescargar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0984e318',
+    color: '#0984e3',
+    border: 'none',
+    padding: '7px 10px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+  },
+  btnEliminar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#d6303118',
+    color: '#d63031',
+    border: 'none',
+    padding: '7px 10px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+  },
+  confirmBox: {
+    marginTop: '16px',
+    backgroundColor: '#fff5f5',
+    border: '1px solid #fab1a0',
+    borderRadius: '12px',
+    padding: '14px',
+  },
   confirmText: { fontSize: '13px', color: '#636e72', marginBottom: '12px', lineHeight: 1.4 },
   confirmActions: { display: 'flex', gap: '8px' },
-  btnCancelar: { flex: 1, backgroundColor: '#fff', color: '#636e72', border: '1px solid #dfe6e9', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
-  btnConfirmarEliminar: { flex: 1, backgroundColor: '#d63031', color: '#fff', border: 'none', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
-  viewerBox: { marginTop: '20px', border: '1px solid #dfe6e9', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  viewerHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #dfe6e9' },
-  closeBtn: { background: 'none', border: 'none', cursor: 'pointer' },
+  btnCancelar: {
+    flex: 1,
+    backgroundColor: '#fff',
+    color: '#636e72',
+    border: '1px solid #dfe6e9',
+    padding: '10px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '13px',
+  },
+  btnConfirmarEliminar: {
+    flex: 1,
+    backgroundColor: '#d63031',
+    color: '#fff',
+    border: 'none',
+    padding: '10px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '13px',
+  },
+  viewerBox: {
+    marginTop: '20px',
+    border: '1px solid #eef0f3',
+    borderRadius: '14px',
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.05)',
+  },
+  viewerHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '14px 16px',
+    borderBottom: '1px solid #eef0f3',
+    backgroundColor: '#fafbfc',
+  },
+  viewerTitle: { fontSize: '14px', fontWeight: '700', color: '#1a1a2e' },
+  closeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#8b949e' },
   viewerImg: { display: 'block', maxWidth: '100%', maxHeight: '70vh', margin: '0 auto', padding: '16px' },
   viewerFrame: { width: '100%', height: '70vh', border: 'none' },
   viewerFallback: { padding: '40px', textAlign: 'center' },

@@ -133,16 +133,16 @@ export default function DetalleCaso({ casoId, onBack }) {
   return (
     <div>
       {/* BACK + ACCIONES */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div style={styles.topActions}>
         <button style={styles.backBtn} onClick={onBack}>
-          <ArrowLeft size={18} /> Volver a Casos
+          <ArrowLeft size={18} /> Volver a casos
         </button>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={styles.accionesGrupo}>
           <button style={styles.btnEditar} onClick={abrirEditar}>
-            <Pencil size={16} /> Editar caso
+            <Pencil size={15} /> Editar caso
           </button>
           <button style={styles.btnInforme} onClick={() => setMostrarInforme(true)}>
-            📊 Generar Informe
+            Generar informe
           </button>
         </div>
       </div>
@@ -151,15 +151,19 @@ export default function DetalleCaso({ casoId, onBack }) {
 
       {/* HEADER CASO */}
       <div style={styles.casoHeader}>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={styles.headerTop}>
-            <span style={{ ...styles.badge, backgroundColor: statusColor[caso.status] + '20', color: statusColor[caso.status] }}>
+            <span style={{
+              ...styles.badge,
+              backgroundColor: (statusColor[caso.status] || '#636e72') + '18',
+              color: statusColor[caso.status] || '#636e72',
+            }}>
               {caso.status?.replace('_', ' ')}
             </span>
-            <span style={styles.radicado}>{caso.numero_radicado}</span>
+            {caso.numero_radicado && <span style={styles.radicado}>{caso.numero_radicado}</span>}
           </div>
           <h2 style={styles.casoTitulo}>{caso.titulo}</h2>
-          <p style={styles.casoDesc}>{caso.descripcion}</p>
+          {caso.descripcion && <p style={styles.casoDesc}>{caso.descripcion}</p>}
         </div>
         <div style={styles.casoMeta}>
           <div style={styles.metaItem}>
@@ -175,8 +179,8 @@ export default function DetalleCaso({ casoId, onBack }) {
             <span style={styles.metaValue}>{caso.ciudad || caso.juzgados?.ciudad || '—'}</span>
           </div>
           <div style={styles.metaItem}>
-            <span style={styles.metaLabel}>Fecha apertura</span>
-            <span style={styles.metaValue}>{new Date(caso.fecha_apertura).toLocaleDateString('es-CO')}</span>
+            <span style={styles.metaLabel}>Apertura</span>
+            <span style={styles.metaValue}>{caso.fecha_apertura ? new Date(caso.fecha_apertura).toLocaleDateString('es-CO') : '—'}</span>
           </div>
         </div>
       </div>
@@ -306,9 +310,18 @@ export default function DetalleCaso({ casoId, onBack }) {
           { id: 'documentos', label: 'Documentos', icon: FileText },
         ].map(t => {
           const Icon = t.icon
+          const activo = tab === t.id
           return (
-            <button key={t.id} style={{ ...styles.tab, borderBottom: tab === t.id ? '2px solid #c9a84c' : '2px solid transparent', color: tab === t.id ? '#1a1a2e' : '#b2bec3' }} onClick={() => setTab(t.id)}>
-              <Icon size={16} /> {t.label}
+            <button
+              key={t.id}
+              style={{
+                ...styles.tab,
+                backgroundColor: activo ? '#1a1a2e' : 'transparent',
+                color: activo ? '#c9a84c' : '#8b949e',
+              }}
+              onClick={() => setTab(t.id)}
+            >
+              <Icon size={15} /> {t.label}
             </button>
           )
         })}
@@ -899,33 +912,132 @@ function DocumentosTab({ casoId }) {
 }
 
 const styles = {
-  backBtn: { display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#636e72', fontSize: '14px' },
-  btnEditar: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#fff', color: '#1a1a2e', border: '1px solid #dfe6e9', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
-  btnInforme: { backgroundColor: '#c9a84c', color: '#1a1a2e', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
-  casoHeader: { backgroundColor: '#fff', borderRadius: '12px', padding: '24px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px' },
-  headerTop: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' },
-  badge: { padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', textTransform: 'capitalize' },
-  radicado: { fontSize: '12px', color: '#b2bec3' },
-  casoTitulo: { fontSize: '22px', fontWeight: '700', color: '#1a1a2e', marginBottom: '8px' },
-  casoDesc: { fontSize: '14px', color: '#636e72' },
-  casoMeta: { display: 'flex', gap: '24px', flexShrink: 0 },
+  topActions: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '16px',
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
+  backBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: '#8b949e',
+    fontSize: '14px',
+    fontWeight: '500',
+    padding: '6px 0',
+  },
+  accionesGrupo: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
+  btnEditar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    backgroundColor: '#fff',
+    color: '#1a1a2e',
+    border: '1px solid #e1e4e8',
+    padding: '10px 14px',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '13px',
+  },
+  btnInforme: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    backgroundColor: '#c9a84c',
+    color: '#1a1a2e',
+    border: 'none',
+    padding: '10px 14px',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    fontWeight: '700',
+    fontSize: '13px',
+  },
+  casoHeader: {
+    backgroundColor: '#fff',
+    borderRadius: '14px',
+    padding: '22px 24px',
+    marginBottom: '16px',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.06)',
+    border: '1px solid #eef0f3',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: '24px',
+    flexWrap: 'wrap',
+  },
+  headerTop: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' },
+  badge: { padding: '5px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', textTransform: 'capitalize' },
+  radicado: { fontSize: '12px', color: '#8b949e', fontWeight: '600' },
+  casoTitulo: {
+    fontSize: '24px',
+    fontWeight: '700',
+    color: '#1a1a2e',
+    margin: '0 0 8px',
+    letterSpacing: '-0.02em',
+    lineHeight: 1.25,
+  },
+  casoDesc: { fontSize: '14px', color: '#636e72', margin: 0, lineHeight: 1.5, maxWidth: '640px' },
+  casoMeta: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(120px, 1fr))',
+    gap: '14px 20px',
+    flexShrink: 0,
+    backgroundColor: '#f8f9fb',
+    borderRadius: '12px',
+    padding: '14px 16px',
+    border: '1px solid #eef0f3',
+  },
   metaItem: { display: 'flex', flexDirection: 'column', gap: '4px' },
-  metaLabel: { fontSize: '11px', color: '#b2bec3', textTransform: 'uppercase' },
-  metaValue: { fontSize: '14px', fontWeight: '600', color: '#1a1a2e' },
+  metaLabel: { fontSize: '10px', color: '#8b949e', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.04em' },
+  metaValue: { fontSize: '13px', fontWeight: '600', color: '#1a1a2e' },
   sectionLabel: { fontSize: '12px', fontWeight: '700', color: '#b2bec3', textTransform: 'uppercase', margin: '8px 0 0' },
-  tabs: { display: 'flex', gap: '4px', backgroundColor: '#fff', borderRadius: '12px', padding: '4px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  tab: { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: 'none', border: 'none', borderBottom: '2px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: '500' },
-  tabContent: { backgroundColor: '#fff', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
+  tabs: {
+    display: 'flex',
+    gap: '6px',
+    backgroundColor: '#fff',
+    borderRadius: '12px',
+    padding: '6px',
+    marginBottom: '14px',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.05)',
+    border: '1px solid #eef0f3',
+    flexWrap: 'wrap',
+  },
+  tab: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 16px',
+    background: 'none',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: '600',
+  },
+  tabContent: {
+    backgroundColor: '#fff',
+    borderRadius: '14px',
+    padding: '22px',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.05)',
+    border: '1px solid #eef0f3',
+  },
   inputRow: { display: 'flex', gap: '12px', marginBottom: '20px', alignItems: 'flex-start' },
   textarea: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9', fontSize: '14px', outline: 'none', resize: 'none', height: '60px' },
-  btnAgregar: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap' },
-  eventoCard: { display: 'flex', gap: '12px', alignItems: 'flex-start', backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '14px', marginBottom: '10px' },
+  btnAgregar: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '10px 16px', borderRadius: '10px', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap' },
+  eventoCard: { display: 'flex', gap: '12px', alignItems: 'flex-start', backgroundColor: '#f8f9fb', borderRadius: '10px', padding: '14px', marginBottom: '10px', border: '1px solid #eef0f3' },
   eventoBadge: { padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', textTransform: 'capitalize', whiteSpace: 'nowrap' },
   eventoTexto: { fontSize: '14px', color: '#2d3436', marginBottom: '4px' },
   eventoFecha: { fontSize: '12px', color: '#b2bec3' },
-  btnNuevo: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px', marginBottom: '16px' },
-  progresoBox: { backgroundColor: '#f8f9fa', borderRadius: '10px', padding: '16px', marginBottom: '16px' },
-  etapaCard: { display: 'flex', gap: '14px', alignItems: 'flex-start', backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '14px', marginBottom: '10px' },
+  btnNuevo: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', fontWeight: '600', fontSize: '13px', marginBottom: '16px' },
+  progresoBox: { backgroundColor: '#f8f9fb', borderRadius: '10px', padding: '16px', marginBottom: '16px', border: '1px solid #eef0f3' },
+  etapaCard: { display: 'flex', gap: '14px', alignItems: 'flex-start', backgroundColor: '#f8f9fb', borderRadius: '10px', padding: '14px', marginBottom: '10px', border: '1px solid #eef0f3' },
   etapaCirculo: { width: '28px', height: '28px', borderRadius: '50%', border: '2px solid', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' },
   etapaNombreBtn: { background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 },
   etapaDetalle: { marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e9ecef', display: 'flex', flexDirection: 'column', gap: '8px' },
@@ -934,10 +1046,10 @@ const styles = {
   btnSubirMini: { display: 'inline-block', backgroundColor: '#fff', color: '#1a1a2e', border: '1px dashed #dfe6e9', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '12px', textAlign: 'center' },
   btnAgregarMini: { display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '0 12px', borderRadius: '8px', cursor: 'pointer' },
   selectEstado: { border: '1px solid #dfe6e9', borderRadius: '6px', padding: '4px 8px', fontSize: '12px', outline: 'none', cursor: 'pointer', backgroundColor: '#fff', fontWeight: '600' },
-  tareaCard: { display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '12px 16px', marginBottom: '8px' },
+  tareaCard: { display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#f8f9fb', borderRadius: '10px', padding: '12px 16px', marginBottom: '8px', border: '1px solid #eef0f3' },
   btnTareaEliminar: { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#b2bec3', padding: '4px', borderRadius: '4px' },
-  btnSubir: { display: 'inline-block', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', marginBottom: '16px' },
-  docCard: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '14px 16px', marginBottom: '10px' },
+  btnSubir: { display: 'inline-block', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: '600', marginBottom: '16px' },
+  docCard: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8f9fb', borderRadius: '10px', padding: '14px 16px', marginBottom: '10px', border: '1px solid #eef0f3' },
   btnVer: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#c9a84c20', color: '#c9a84c', border: 'none', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
   btnDescargar: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#0984e320', color: '#0984e3', border: 'none', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
   btnDocEliminar: { display: 'flex', alignItems: 'center', backgroundColor: '#d6303120', color: '#d63031', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer' },

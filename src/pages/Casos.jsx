@@ -3,13 +3,13 @@ import { supabase } from '../supabase'
 import { Plus, Search, Briefcase, X } from 'lucide-react'
 import DetalleCaso from './DetalleCaso'
 
-export default function Casos({ session }) {
+export default function Casos({ session, casoInicialId = null, onLimpiarCasoInicial }) {
   const [casos, setCasos] = useState([])
   const [clientes, setClientes] = useState([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
-  const [casoSeleccionado, setCasoSeleccionado] = useState(null)
+  const [casoSeleccionado, setCasoSeleccionado] = useState(casoInicialId || null)
   const [procesosTypes, setProcesosTypes] = useState([])
   const [juzgados, setJuzgados] = useState([])
   const [nuevoJuzgadoNombre, setNuevoJuzgadoNombre] = useState('')
@@ -25,6 +25,13 @@ export default function Casos({ session }) {
     fetchClientes()
     fetchJuzgados()
   }, [])
+
+  useEffect(() => {
+    if (casoInicialId) {
+      setCasoSeleccionado(casoInicialId)
+      onLimpiarCasoInicial?.()
+    }
+  }, [casoInicialId])
 
   const fetchCasos = async () => {
     let { data, error } = await supabase
@@ -155,7 +162,7 @@ export default function Casos({ session }) {
     <div>
       <div style={styles.header}>
         <div style={styles.searchBox}>
-          <Search size={16} color="#b2bec3" />
+          <Search size={18} color="#8b949e" />
           <input
             style={styles.searchInput}
             placeholder="Buscar caso o cliente..."
@@ -164,7 +171,7 @@ export default function Casos({ session }) {
           />
         </div>
         <button style={styles.btnNuevo} onClick={() => setModalOpen(true)}>
-          <Plus size={18} /> Nuevo Caso
+          <Plus size={18} /> Nuevo caso
         </button>
       </div>
 
@@ -177,22 +184,37 @@ export default function Casos({ session }) {
         </div>
       ) : (
         <div style={styles.grid}>
-          {casosFiltrados.map(caso => (
-            <div key={caso.id} style={{ ...styles.card, cursor: 'pointer' }} onClick={() => setCasoSeleccionado(caso.id)}>
-              <div style={styles.cardHeader}>
-                <span style={{ ...styles.badge, backgroundColor: statusColor[caso.status] + '20', color: statusColor[caso.status] }}>
-                  {caso.status.replace('_', ' ')}
-                </span>
-                <span style={styles.radicado}>{caso.numero_radicado}</span>
+          {casosFiltrados.map(caso => {
+            const color = statusColor[caso.status] || '#636e72'
+            return (
+              <div
+                key={caso.id}
+                style={{ ...styles.card, borderTop: `3px solid ${color}`, cursor: 'pointer' }}
+                onClick={() => setCasoSeleccionado(caso.id)}
+              >
+                <div style={styles.cardHeader}>
+                  <span style={{ ...styles.badge, backgroundColor: color + '18', color }}>
+                    {caso.status.replace('_', ' ')}
+                  </span>
+                  {caso.numero_radicado && (
+                    <span style={styles.radicado}>{caso.numero_radicado}</span>
+                  )}
+                </div>
+                <h3 style={styles.cardTitle}>{caso.titulo}</h3>
+                {caso.descripcion && (
+                  <p style={styles.cardDesc}>{caso.descripcion}</p>
+                )}
+                <div style={styles.cardFooter}>
+                  <span style={styles.tag}>
+                    {caso.clients ? `${caso.clients.nombre} ${caso.clients.apellido || ''}` : 'Sin cliente'}
+                  </span>
+                  {(caso.juzgados?.nombre || caso.ciudad) && (
+                    <span style={styles.ciudad}>{caso.juzgados?.nombre || caso.ciudad}</span>
+                  )}
+                </div>
               </div>
-              <h3 style={styles.cardTitle}>{caso.titulo}</h3>
-              <p style={styles.cardDesc}>{caso.descripcion}</p>
-              <div style={styles.cardFooter}>
-                <span style={styles.tag}>{caso.clients ? `${caso.clients.nombre} ${caso.clients.apellido || ''}` : 'Sin cliente'}</span>
-                <span style={styles.ciudad}>{caso.juzgados?.nombre || caso.ciudad || ''}</span>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -275,21 +297,145 @@ export default function Casos({ session }) {
 }
 
 const styles = {
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
-  searchBox: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#fff', padding: '10px 16px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', width: '300px' },
-  searchInput: { border: 'none', outline: 'none', fontSize: '14px', width: '100%' },
-  btnNuevo: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' },
-  empty: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px', backgroundColor: '#fff', borderRadius: '12px' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' },
-  card: { backgroundColor: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
-  badge: { padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', textTransform: 'capitalize' },
-  radicado: { fontSize: '11px', color: '#b2bec3' },
-  cardTitle: { fontSize: '16px', fontWeight: '600', color: '#1a1a2e', marginBottom: '8px' },
-  cardDesc: { fontSize: '13px', color: '#636e72', marginBottom: '16px' },
-  cardFooter: { display: 'flex', justifyContent: 'space-between' },
-  tag: { fontSize: '12px', backgroundColor: '#f0f2f5', padding: '4px 10px', borderRadius: '20px', color: '#636e72' },
-  ciudad: { fontSize: '12px', color: '#b2bec3' },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '24px',
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
+  searchBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    backgroundColor: '#fff',
+    padding: '12px 16px',
+    borderRadius: '12px',
+    border: '1px solid #eef0f3',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.05)',
+    flex: 1,
+    minWidth: '220px',
+    maxWidth: '420px',
+  },
+  searchInput: {
+    border: 'none',
+    outline: 'none',
+    fontSize: '14px',
+    width: '100%',
+    color: '#1a1a2e',
+    background: 'transparent',
+  },
+  btnNuevo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    backgroundColor: '#1a1a2e',
+    color: '#c9a84c',
+    border: '1px solid rgba(201,168,76,0.35)',
+    padding: '12px 20px',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    fontWeight: '700',
+    fontSize: '14px',
+    boxShadow: '0 4px 12px rgba(26,26,46,0.18)',
+    whiteSpace: 'nowrap',
+  },
+  empty: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    padding: '60px',
+    backgroundColor: '#fff',
+    borderRadius: '14px',
+    border: '1px solid #eef0f3',
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+    gap: '16px',
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: '14px',
+    padding: '20px',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.06)',
+    border: '1px solid #eef0f3',
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: '180px',
+    transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+  },
+  cardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '14px',
+    gap: '8px',
+  },
+  badge: {
+    padding: '5px 10px',
+    borderRadius: '20px',
+    fontSize: '11px',
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  radicado: {
+    fontSize: '11px',
+    color: '#8b949e',
+    fontWeight: '600',
+    letterSpacing: '0.02em',
+  },
+  cardTitle: {
+    fontSize: '16px',
+    fontWeight: '700',
+    color: '#1a1a2e',
+    margin: '0 0 8px',
+    letterSpacing: '-0.01em',
+    lineHeight: 1.3,
+  },
+  cardDesc: {
+    fontSize: '13px',
+    color: '#636e72',
+    margin: '0 0 16px',
+    lineHeight: 1.45,
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+    flex: 1,
+  },
+  cardFooter: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '8px',
+    marginTop: 'auto',
+    paddingTop: '14px',
+    borderTop: '1px solid #f0f2f5',
+  },
+  tag: {
+    fontSize: '12px',
+    backgroundColor: '#f5f6fa',
+    padding: '5px 10px',
+    borderRadius: '20px',
+    color: '#636e72',
+    fontWeight: '600',
+    maxWidth: '60%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  ciudad: {
+    fontSize: '12px',
+    color: '#8b949e',
+    fontWeight: '500',
+    textAlign: 'right',
+    maxWidth: '40%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   overlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 },
   modal: { backgroundColor: '#fff', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' },
   modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },

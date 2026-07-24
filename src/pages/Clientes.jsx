@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { Plus, Search, Users, X, Phone, Mail } from 'lucide-react'
+import { Plus, Search, Users, X, Phone, Mail, Pencil } from 'lucide-react'
 
 export default function Clientes() {
   const [clientes, setClientes] = useState([])
@@ -132,7 +132,7 @@ const editarCliente = async () => {
     <div>
       <div style={styles.header}>
         <div style={styles.searchBox}>
-          <Search size={16} color="#b2bec3" />
+          <Search size={18} color="#8b949e" />
           <input
             style={styles.searchInput}
             placeholder="Buscar cliente..."
@@ -141,7 +141,7 @@ const editarCliente = async () => {
           />
         </div>
         <button style={styles.btnNuevo} onClick={() => setModalOpen(true)}>
-          <Plus size={18} /> Nuevo Cliente
+          <Plus size={18} /> Nuevo cliente
         </button>
       </div>
 
@@ -154,40 +154,50 @@ const editarCliente = async () => {
         </div>
       ) : (
         <div style={styles.grid}>
-          {clientesFiltrados.map(cliente => (
-            <div key={cliente.id} style={styles.card}>
-            <div style={styles.avatar}>
-              {cliente.nombre[0]}{cliente.apellido?.[0]}
-            </div>
-            <div style={styles.cardInfo}>
-              <h3 style={styles.cardName}>{cliente.nombre} {cliente.apellido}</h3>
-              {cliente.documento && <p style={styles.cardDoc}>CC: {cliente.documento}</p>}
-              {cliente.correo && (
-                <div style={styles.cardDetail}>
-                  <Mail size={13} color="#b2bec3" />
-                  <span style={styles.cardText}>{cliente.correo}</span>
+          {clientesFiltrados.map(cliente => {
+            const esJuridica = cliente.tipo_persona === 'juridica'
+            const tipoColor = esJuridica ? '#0984e3' : '#00b894'
+            return (
+              <div key={cliente.id} style={styles.card}>
+                <div style={styles.avatar}>
+                  {cliente.nombre?.[0]}{cliente.apellido?.[0]}
                 </div>
-              )}
-              {cliente.telefono && (
-                <div style={styles.cardDetail}>
-                  <Phone size={13} color="#b2bec3" />
-                  <span style={styles.cardText}>{cliente.telefono}</span>
+                <div style={styles.cardInfo}>
+                  <div style={styles.cardTop}>
+                    <h3 style={styles.cardName}>{cliente.nombre} {cliente.apellido}</h3>
+                    <span style={{ ...styles.badge, backgroundColor: tipoColor + '18', color: tipoColor }}>
+                      {esJuridica ? 'Jurídica' : 'Natural'}
+                    </span>
+                  </div>
+                  {cliente.documento && <p style={styles.cardDoc}>Doc: {cliente.documento}</p>}
+                  <div style={styles.cardDetails}>
+                    {cliente.correo && (
+                      <div style={styles.cardDetail}>
+                        <Mail size={13} color="#8b949e" />
+                        <span style={styles.cardText}>{cliente.correo}</span>
+                      </div>
+                    )}
+                    {cliente.telefono && (
+                      <div style={styles.cardDetail}>
+                        <Phone size={13} color="#8b949e" />
+                        <span style={styles.cardText}>{cliente.telefono}</span>
+                      </div>
+                    )}
+                    {cliente.ciudad && (
+                      <span style={styles.cardCiudad}>{cliente.ciudad}</span>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
-              <span style={{ ...styles.badge, backgroundColor: cliente.tipo_persona === 'juridica' ? '#0984e320' : '#00b89420', color: cliente.tipo_persona === 'juridica' ? '#0984e3' : '#00b894' }}>
-                {cliente.tipo_persona}
-                </span>
                 <button
                   style={styles.btnEditar}
                   onClick={() => { setClienteEditar(cliente); setConfirmarEliminar(false); setModalEditar(true) }}
+                  title="Editar cliente"
                 >
-                  ✏️
+                  <Pencil size={15} />
                 </button>
-            </div>
-          </div>
-          ))}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -281,29 +291,113 @@ const editarCliente = async () => {
 }
 
 const styles = {
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
-  searchBox: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#fff', padding: '10px 16px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', width: '300px' },
-  searchInput: { border: 'none', outline: 'none', fontSize: '14px', width: '100%' },
-  btnNuevo: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' },
-  empty: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px', backgroundColor: '#fff', borderRadius: '12px' },
-  grid: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  card: { backgroundColor: '#fff', borderRadius: '12px', padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: '16px' },
-  avatar: { width: '44px', height: '44px', borderRadius: '50%', backgroundColor: '#1a1a2e', color: '#c9a84c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '16px', flexShrink: 0 },
-  cardInfo: { flex: 1 },
-  cardName: { fontSize: '15px', fontWeight: '600', color: '#1a1a2e', marginBottom: '2px' },
-  cardDoc: { fontSize: '12px', color: '#b2bec3', marginBottom: '4px' },
-  cardDetail: { display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '24px',
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
+  searchBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    backgroundColor: '#fff',
+    padding: '12px 16px',
+    borderRadius: '12px',
+    border: '1px solid #eef0f3',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.05)',
+    flex: 1,
+    minWidth: '220px',
+    maxWidth: '420px',
+  },
+  searchInput: {
+    border: 'none',
+    outline: 'none',
+    fontSize: '14px',
+    width: '100%',
+    color: '#1a1a2e',
+    background: 'transparent',
+  },
+  btnNuevo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    backgroundColor: '#1a1a2e',
+    color: '#c9a84c',
+    border: '1px solid rgba(201,168,76,0.35)',
+    padding: '12px 20px',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    fontWeight: '700',
+    fontSize: '14px',
+    boxShadow: '0 4px 12px rgba(26,26,46,0.18)',
+    whiteSpace: 'nowrap',
+  },
+  empty: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    padding: '60px',
+    backgroundColor: '#fff',
+    borderRadius: '14px',
+    border: '1px solid #eef0f3',
+  },
+  grid: { display: 'flex', flexDirection: 'column', gap: '10px' },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: '14px',
+    padding: '16px 18px',
+    boxShadow: '0 2px 10px rgba(26,26,46,0.05)',
+    border: '1px solid #eef0f3',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+  },
+  avatar: {
+    width: '48px',
+    height: '48px',
+    borderRadius: '50%',
+    backgroundColor: '#1a1a2e',
+    color: '#c9a84c',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: '700',
+    fontSize: '15px',
+    flexShrink: 0,
+    border: '2px solid rgba(201,168,76,0.35)',
+  },
+  cardInfo: { flex: 1, minWidth: 0 },
+  cardTop: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '2px' },
+  cardName: { fontSize: '15px', fontWeight: '700', color: '#1a1a2e', margin: 0 },
+  cardDoc: { fontSize: '12px', color: '#8b949e', margin: '2px 0 6px', fontWeight: '500' },
+  cardDetails: { display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' },
+  cardDetail: { display: 'flex', alignItems: 'center', gap: '6px' },
   cardText: { fontSize: '13px', color: '#636e72' },
-  badge: { padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', flexShrink: 0, textTransform: 'capitalize' },
+  cardCiudad: { fontSize: '12px', color: '#8b949e', fontWeight: '500' },
+  badge: { padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', flexShrink: 0 },
   overlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 },
   modal: { backgroundColor: '#fff', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' },
   modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
   closeBtn: { background: 'none', border: 'none', cursor: 'pointer' },
   form: { display: 'flex', flexDirection: 'column', gap: '12px' },
   row: { display: 'flex', gap: '12px' },
-  input: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9', fontSize: '14px', outline: 'none', width: '100%' },
+  input: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9', fontSize: '14px', outline: 'none', width: '100%', boxSizing: 'border-box' },
   btnGuardar: { backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' },
-  btnEditar: { background: 'none', border: '1px solid #dfe6e9', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '14px' },
+  btnEditar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#fff',
+    border: '1px solid #e1e4e8',
+    borderRadius: '10px',
+    padding: '10px',
+    cursor: 'pointer',
+    color: '#1a1a2e',
+    flexShrink: 0,
+  },
   btnEliminar: { backgroundColor: '#fff', color: '#d63031', border: '1px solid #d63031', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' },
   confirmBox: { backgroundColor: '#fff5f5', border: '1px solid #fab1a0', borderRadius: '8px', padding: '14px' },
   confirmText: { fontSize: '13px', color: '#636e72', marginBottom: '12px', lineHeight: 1.4 },
