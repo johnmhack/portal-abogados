@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { Plus, Search, Landmark, X, Pencil } from 'lucide-react'
 
-const formVacio = { nombre: '', ciudad: '', especialidad: '', direccion: '', telefono: '' }
+const formVacio = { nombre: '', ciudad: '', especialidad: '', direccion: '', telefono: '', correo: '' }
 
 export default function Juzgados() {
   const [juzgados, setJuzgados] = useState([])
@@ -38,6 +38,7 @@ export default function Juzgados() {
       especialidad: j.especialidad || '',
       direccion: j.direccion || '',
       telefono: j.telefono || '',
+      correo: j.correo || '',
     })
     setConfirmarEliminar(false)
     setModalOpen(true)
@@ -59,6 +60,7 @@ export default function Juzgados() {
       especialidad: form.especialidad || null,
       direccion: form.direccion || null,
       telefono: form.telefono || null,
+      correo: form.correo || null,
     }
     const { error } = editando
       ? await supabase.from('juzgados').update(payload).eq('id', editando.id)
@@ -119,6 +121,9 @@ export default function Juzgados() {
                   {[j.ciudad, j.especialidad].filter(Boolean).join(' · ') || 'Sin ciudad / especialidad'}
                 </p>
                 {j.direccion && <p style={styles.sub}>{j.direccion}</p>}
+                {(j.telefono || j.correo) && (
+                  <p style={styles.sub}>{[j.telefono, j.correo].filter(Boolean).join(' · ')}</p>
+                )}
               </div>
               <button style={styles.btnEditar} onClick={() => abrirEditar(j)}><Pencil size={14} /></button>
             </div>
@@ -139,6 +144,7 @@ export default function Juzgados() {
               <input style={styles.input} placeholder="Especialidad (civil, laboral, penal...)" value={form.especialidad} onChange={e => setForm({ ...form, especialidad: e.target.value })} />
               <input style={styles.input} placeholder="Dirección" value={form.direccion} onChange={e => setForm({ ...form, direccion: e.target.value })} />
               <input style={styles.input} placeholder="Teléfono" value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} />
+              <input style={styles.input} placeholder="Correo electrónico" type="email" value={form.correo} onChange={e => setForm({ ...form, correo: e.target.value })} />
               <button style={styles.btnGuardar} onClick={guardar} disabled={guardando}>
                 {guardando ? 'Guardando...' : 'Guardar'}
               </button>

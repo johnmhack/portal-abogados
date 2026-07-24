@@ -236,9 +236,10 @@ export default function Casos({ session }) {
                   {creandoJuzgado ? '...' : 'Crear'}
                 </button>
               </div>
-              <select 
-                style={styles.input} 
-                value={nuevo.process_type_id || ''} 
+
+              <select
+                style={styles.input}
+                value={nuevo.process_type_id || ''}
                 onChange={e => setNuevo({ ...nuevo, process_type_id: e.target.value })}
               >
                 <option value="">Seleccionar tipo de proceso</option>
@@ -290,11 +291,11 @@ const styles = {
   tag: { fontSize: '12px', backgroundColor: '#f0f2f5', padding: '4px 10px', borderRadius: '20px', color: '#636e72' },
   ciudad: { fontSize: '12px', color: '#b2bec3' },
   overlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 },
-  modal: { backgroundColor: '#fff', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '480px' },
+  modal: { backgroundColor: '#fff', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' },
   modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
   closeBtn: { background: 'none', border: 'none', cursor: 'pointer' },
   form: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  input: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9', fontSize: '14px', outline: 'none', width: '100%' },
+  input: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9', fontSize: '14px', outline: 'none', width: '100%', boxSizing: 'border-box' },
   btnCrearJuzgado: { backgroundColor: '#c9a84c', color: '#1a1a2e', border: 'none', padding: '10px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap' },
   btnGuardar: { backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' }
 }

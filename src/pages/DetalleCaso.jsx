@@ -385,8 +385,10 @@ function EtapasTab({ casoId }) {
   const [nueva, setNueva] = useState({ nombre: '', notas: '' })
   const [nuevaTarea, setNuevaTarea] = useState({})
   const [subiendoStage, setSubiendoStage] = useState(null)
+  const [vistaDoc, setVistaDoc] = useState(null)
 
   useEffect(() => { fetchTodo() }, [casoId])
+  useEffect(() => () => { if (vistaDoc?.url) URL.revokeObjectURL(vistaDoc.url) }, [vistaDoc])
 
   const fetchTodo = async () => {
     const { data: etapasData } = await supabase
@@ -470,10 +472,29 @@ function EtapasTab({ casoId }) {
   }
 
   const eliminarDocEtapa = async (doc) => {
+    if (vistaDoc?.id === doc.id) {
+      if (vistaDoc.url) URL.revokeObjectURL(vistaDoc.url)
+      setVistaDoc(null)
+    }
     await supabase.storage.from('documentos').remove([doc.url])
     await supabase.from('documents').delete().eq('id', doc.id)
     fetchTodo()
   }
+
+  const visualizarDocEtapa = async (doc) => {
+    if (vistaDoc?.url) URL.revokeObjectURL(vistaDoc.url)
+    const { data } = await supabase.storage.from('documentos').download(doc.url)
+    if (!data) return
+    setVistaDoc({ ...doc, url: URL.createObjectURL(data) })
+  }
+
+  const cerrarVistaDoc = () => {
+    if (vistaDoc?.url) URL.revokeObjectURL(vistaDoc.url)
+    setVistaDoc(null)
+  }
+
+  const esImagen = (tipo) => tipo?.startsWith('image/')
+  const esPdf = (tipo, nombre) => tipo?.includes('pdf') || nombre?.toLowerCase().endsWith('.pdf')
 
   const agregarTareaEtapa = async (stageId) => {
     const titulo = (nuevaTarea[stageId] || '').trim()
@@ -587,11 +608,33 @@ function EtapasTab({ casoId }) {
                     {docs.map(doc => (
                       <div key={doc.id} style={styles.etapaDocRow}>
                         <span style={{ fontSize: '13px', color: '#2d3436', flex: 1 }}>📄 {doc.nombre}</span>
+                        <button style={styles.btnVer} onClick={() => visualizarDocEtapa(doc)} title="Ver">
+                          <Eye size={14} /> Ver
+                        </button>
                         <button style={styles.btnTareaEliminar} onClick={() => eliminarDocEtapa(doc)} title="Eliminar">
                           <X size={14} />
                         </button>
                       </div>
                     ))}
+
+                    {vistaDoc && vistaDoc.stage_id === etapa.id && (
+                      <div style={styles.viewerBox}>
+                        <div style={styles.viewerHeader}>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a2e' }}>{vistaDoc.nombre}</span>
+                          <button style={styles.closeBtn} onClick={cerrarVistaDoc}><X size={16} /></button>
+                        </div>
+                        {esImagen(vistaDoc.tipo_documento) ? (
+                          <img src={vistaDoc.url} alt={vistaDoc.nombre} style={styles.viewerImg} />
+                        ) : esPdf(vistaDoc.tipo_documento, vistaDoc.nombre) ? (
+                          <iframe src={vistaDoc.url} title={vistaDoc.nombre} style={{ ...styles.viewerFrame, height: '50vh' }} />
+                        ) : (
+                          <div style={styles.viewerFallback}>
+                            <p style={{ color: '#636e72', fontSize: '13px' }}>Vista previa no disponible para este tipo de archivo.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <label style={styles.btnSubirMini}>
                       {subiendoStage === etapa.id ? 'Subiendo...' : '+ Subir documento'}
                       <input
