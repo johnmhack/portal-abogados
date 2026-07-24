@@ -13,12 +13,12 @@ import {
   CheckCircle, AlertCircle, Landmark
 } from 'lucide-react'
 
-export default function Dashboard({ session }) {
+export default function Dashboard({ session, userProfile }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [activePage, setActivePage] = useState('dashboard')
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
     { id: 'casos', label: 'Casos', icon: Briefcase },
     { id: 'clientes', label: 'Clientes', icon: Users },
     { id: 'juzgados', label: 'Juzgados', icon: Landmark },
@@ -55,20 +55,49 @@ const fetchCasosRecientes = async () => {
   setCasosRecientes(data || [])
 }
 
+  const hora = new Date().getHours()
+  const saludo = hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches'
+  const nombreUsuario = userProfile?.nombre || session.user.email?.split('@')[0] || ''
+  const isHome = activePage === 'dashboard'
+  const pageLabel = menuItems.find(m => m.id === activePage)?.label
+  const iniciales = `${userProfile?.nombre?.[0] || session.user.email?.[0] || ''}${userProfile?.apellido?.[0] || ''}`.toUpperCase()
+
   return (
     <div style={styles.container}>
       {/* SIDEBAR */}
       <div style={{ ...styles.sidebar, width: sidebarOpen ? '260px' : '70px' }}>
-        <div style={styles.sidebarHeader}>
-  {sidebarOpen && (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-      <img src={logo} alt="SAR" style={{ height: '40px', width: 'auto' }} />
-    </div>
-  )}
-  <button style={styles.menuBtn} onClick={() => setSidebarOpen(!sidebarOpen)}>
-    {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-  </button>
-</div>
+        <div style={{
+          ...styles.sidebarHeader,
+          flexDirection: sidebarOpen ? 'row' : 'column',
+          justifyContent: sidebarOpen ? 'space-between' : 'center',
+          gap: sidebarOpen ? '12px' : '14px',
+          padding: sidebarOpen ? '22px 16px' : '20px 10px',
+        }}>
+          <div style={{
+            ...styles.logoWrap,
+            justifyContent: sidebarOpen ? 'flex-start' : 'center',
+            width: sidebarOpen ? 'auto' : '100%',
+          }}>
+            <img
+              src={logo}
+              alt="SAR Abogados"
+              style={{
+                height: sidebarOpen ? '44px' : '36px',
+                width: 'auto',
+                display: 'block',
+                objectFit: 'contain',
+              }}
+            />
+            {sidebarOpen && (
+              <div style={styles.logoText}>
+                <span style={styles.logoSub}>Abogados</span>
+              </div>
+            )}
+          </div>
+          <button style={styles.menuBtn} onClick={() => setSidebarOpen(!sidebarOpen)} title={sidebarOpen ? 'Ocultar menú' : 'Mostrar menú'}>
+            {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+        </div>
 
         <nav style={styles.nav}>
           {menuItems.map(item => {
@@ -99,27 +128,43 @@ const fetchCasosRecientes = async () => {
           })}
         </nav>
 
-        <button style={styles.logoutBtn} onClick={() => supabase.auth.signOut()}>
-          <LogOut size={20} color="#a0aec0" />
-          {sidebarOpen && <span style={styles.navLabel}>Cerrar sesión</span>}
-        </button>
+        <div style={styles.logoutWrap}>
+          <button style={styles.logoutBtn} onClick={() => supabase.auth.signOut()}>
+            <LogOut size={18} color="#fab1a0" />
+            {sidebarOpen && <span style={styles.logoutLabel}>Cerrar sesión</span>}
+          </button>
+        </div>
       </div>
 
       {/* MAIN */}
-      <div style={styles.main}>
+      <div style={{ ...styles.main, marginLeft: sidebarOpen ? '260px' : '70px' }}>
         {/* TOPBAR */}
         <div style={styles.topbar}>
           <div>
-            <h1 style={styles.pageTitle}>
-              {menuItems.find(m => m.id === activePage)?.label}
-            </h1>
-            <p style={styles.pageSubtitle}>Portal SAR Abogados</p>
+            {isHome ? (
+              <>
+                <p style={styles.brandLine}>SAR Abogados</p>
+                <h1 style={styles.pageTitleHome}>
+                  {saludo}, {nombreUsuario}
+                </h1>
+                <div style={styles.titleAccent} />
+              </>
+            ) : (
+              <>
+                <h1 style={styles.pageTitle}>{pageLabel}</h1>
+                <p style={styles.pageSubtitle}>Gestión del despacho</p>
+              </>
+            )}
           </div>
           <div style={styles.userInfo}>
-            <div style={styles.avatar}>
-              {session.user.email[0].toUpperCase()}
+            <div>
+              <p style={styles.userName}>{nombreUsuario}{userProfile?.apellido ? ` ${userProfile.apellido}` : ''}</p>
+              <p style={styles.userEmail}>{session.user.email}</p>
+              {userProfile?.rol && (
+                <p style={styles.userRol}>{userProfile.rol}</p>
+              )}
             </div>
-            <span style={styles.userEmail}>{session.user.email}</span>
+            <div style={styles.avatar}>{iniciales}</div>
           </div>
         </div>
 
@@ -148,14 +193,15 @@ const fetchCasosRecientes = async () => {
               {/* WELCOME */}
               <div style={styles.welcomeCard}>
                 <div style={styles.welcomeText}>
-                  <h2 style={{ color: '#1a1a2e', marginBottom: '8px' }}>
-                    Bienvenido al Portal SAR Abogados 👋
+                  <h2 style={{ color: '#fff', marginBottom: '8px', fontSize: '20px', fontWeight: '700' }}>
+                    Tu práctica, en un solo lugar
                   </h2>
-                  <p style={{ color: '#636e72' }}>
-                    Gestiona tus casos, clientes y documentos desde un solo lugar.
+                  <p style={{ color: 'rgba(255,255,255,0.7)', margin: 0, fontSize: '14px', lineHeight: 1.5 }}>
+                    Casos, clientes, documentos y audiencias listos para gestionar.
                   </p>
                 </div>
                 <div style={styles.welcomeDecor} />
+                <div style={styles.welcomeDecor2} />
               </div>
 
               {/* RECENT */}
@@ -212,15 +258,41 @@ const styles = {
   sidebarHeader: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '24px 16px',
-    borderBottom: '1px solid rgba(255,255,255,0.05)'
+    borderBottom: '1px solid rgba(255,255,255,0.08)',
+    minHeight: '88px',
+  },
+  logoWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    minWidth: 0,
+  },
+  logoText: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    lineHeight: 1.1,
+  },
+  logoSub: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: '13px',
+    fontWeight: '600',
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase',
   },
   sidebarTitle: { color: '#c9a84c', fontSize: '24px', fontWeight: '700' },
   sidebarSubtitle: { color: '#a0aec0', fontSize: '12px' },
   menuBtn: {
-    background: 'none', border: 'none', cursor: 'pointer',
-    color: '#a0aec0', padding: '4px'
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    color: '#a0aec0',
+    padding: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   nav: { flex: 1, padding: '16px 8px', display: 'flex', flexDirection: 'column', gap: '4px' },
   navItem: {
@@ -229,30 +301,89 @@ const styles = {
     cursor: 'pointer', transition: 'all 0.2s', width: '100%'
   },
   navLabel: { fontSize: '14px', fontWeight: '500', whiteSpace: 'nowrap' },
+  logoutWrap: {
+    padding: '12px',
+    borderTop: '1px solid rgba(255,255,255,0.08)',
+  },
   logoutBtn: {
-    display: 'flex', alignItems: 'center', gap: '12px',
-    padding: '16px', border: 'none', background: 'none',
-    cursor: 'pointer', borderTop: '1px solid rgba(255,255,255,0.05)'
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    width: '100%',
+    padding: '12px 14px',
+    border: '1px solid rgba(214,48,49,0.35)',
+    borderRadius: '10px',
+    background: 'rgba(214,48,49,0.12)',
+    cursor: 'pointer',
+  },
+  logoutLabel: {
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#fab1a0',
+    whiteSpace: 'nowrap',
   },
   main: { flex: 1, marginLeft: '260px', transition: 'margin 0.3s ease' },
   topbar: {
-    backgroundColor: '#ffffff',
-    padding: '16px 32px',
+    background: 'linear-gradient(180deg, #22223a 0%, #1a1a2e 100%)',
+    padding: '22px 32px',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+    boxShadow: '0 4px 16px rgba(26,26,46,0.25)',
+    borderBottom: '1px solid rgba(201,168,76,0.15)',
   },
-  pageTitle: { fontSize: '22px', fontWeight: '700', color: '#1a1a2e' },
-  pageSubtitle: { fontSize: '12px', color: '#b2bec3', marginTop: '2px' },
-  userInfo: { display: 'flex', alignItems: 'center', gap: '12px' },
+  brandLine: {
+    fontSize: '12px',
+    fontWeight: '700',
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    color: '#c9a84c',
+    margin: '0 0 6px',
+  },
+  pageTitleHome: {
+    fontSize: '30px',
+    fontWeight: '700',
+    color: '#ffffff',
+    margin: 0,
+    letterSpacing: '-0.02em',
+    lineHeight: 1.15,
+  },
+  titleAccent: {
+    width: '48px',
+    height: '3px',
+    backgroundColor: '#c9a84c',
+    borderRadius: '2px',
+    marginTop: '10px',
+  },
+  pageTitle: { fontSize: '26px', fontWeight: '700', color: '#ffffff', margin: 0, letterSpacing: '-0.02em' },
+  pageSubtitle: { fontSize: '13px', color: 'rgba(255,255,255,0.45)', marginTop: '4px' },
+  userInfo: { display: 'flex', alignItems: 'center', gap: '14px', textAlign: 'right' },
   avatar: {
-    width: '38px', height: '38px', borderRadius: '50%',
-    backgroundColor: '#1a1a2e', color: '#c9a84c',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontWeight: '700', fontSize: '16px'
+    width: '56px',
+    height: '56px',
+    borderRadius: '50%',
+    backgroundColor: 'rgba(201,168,76,0.12)',
+    color: '#c9a84c',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: '700',
+    fontSize: '18px',
+    border: '2px solid #c9a84c',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+    flexShrink: 0,
   },
-  userEmail: { fontSize: '13px', color: '#636e72' },
+  userName: { fontSize: '16px', fontWeight: '700', color: '#ffffff', margin: 0, letterSpacing: '-0.01em' },
+  userEmail: { fontSize: '13px', color: 'rgba(255,255,255,0.55)', margin: '3px 0 0' },
+  userRol: {
+    fontSize: '11px',
+    fontWeight: '700',
+    color: '#c9a84c',
+    textTransform: 'capitalize',
+    margin: '4px 0 0',
+    letterSpacing: '0.04em',
+  },
   content: { padding: '32px' },
   statsGrid: {
     display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
@@ -269,16 +400,22 @@ const styles = {
   statValue: { fontSize: '28px', fontWeight: '700', color: '#1a1a2e' },
   statIcon: { padding: '12px', borderRadius: '12px' },
   welcomeCard: {
-    backgroundColor: '#1a1a2e', borderRadius: '12px',
-    padding: '28px', marginBottom: '24px',
+    background: 'linear-gradient(135deg, #1a1a2e 0%, #2d2d4a 100%)',
+    borderRadius: '14px',
+    padding: '28px 32px', marginBottom: '24px',
     display: 'flex', justifyContent: 'space-between',
     alignItems: 'center', overflow: 'hidden', position: 'relative'
   },
-  welcomeText: { zIndex: 1 },
+  welcomeText: { zIndex: 1, maxWidth: '520px' },
   welcomeDecor: {
     position: 'absolute', right: '-20px', top: '-20px',
     width: '150px', height: '150px', borderRadius: '50%',
-    backgroundColor: 'rgba(201,168,76,0.1)'
+    backgroundColor: 'rgba(201,168,76,0.12)'
+  },
+  welcomeDecor2: {
+    position: 'absolute', right: '60px', bottom: '-40px',
+    width: '100px', height: '100px', borderRadius: '50%',
+    backgroundColor: 'rgba(201,168,76,0.08)'
   },
   recentCard: {
     backgroundColor: '#ffffff', borderRadius: '12px',
