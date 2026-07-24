@@ -250,7 +250,7 @@ export default function Casos({ session }) {
                     return acc
                   }, {})
                 ).map(([modulo, procesos]) => (
-                  <optgroup key={modulo} label={modulo}>
+                  <optgroup key={modulo} label={`${modulo}\u00A0\u00A0\u00A0`}>
                     {procesos.map(p => (
                       <option key={p.id} value={p.id}>{p.nombre}</option>
                     ))}
