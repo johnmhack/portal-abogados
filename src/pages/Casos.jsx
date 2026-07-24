@@ -27,10 +27,20 @@ export default function Casos({ session }) {
   }, [])
 
   const fetchCasos = async () => {
-    const { data } = await supabase
+    let { data, error } = await supabase
       .from('cases')
       .select('*, clients(nombre, apellido), juzgados(nombre, ciudad)')
       .order('creado_en', { ascending: false })
+
+    if (error) {
+      console.log('fetchCasos con juzgados:', error.message)
+      const fallback = await supabase
+        .from('cases')
+        .select('*, clients(nombre, apellido)')
+        .order('creado_en', { ascending: false })
+      data = fallback.data
+    }
+
     setCasos(data || [])
     setLoading(false)
   }

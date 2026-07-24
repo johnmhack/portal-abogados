@@ -20,11 +20,22 @@ export default function DetalleCaso({ casoId, onBack }) {
   useEffect(() => { fetchCaso() }, [casoId])
 
   const fetchCaso = async () => {
-    const { data } = await supabase
+    let { data, error } = await supabase
       .from('cases')
       .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion), juzgados(id, nombre, ciudad, especialidad)')
       .eq('id', casoId)
       .single()
+
+    if (error) {
+      console.log('fetchCaso con juzgados:', error.message)
+      const fallback = await supabase
+        .from('cases')
+        .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion)')
+        .eq('id', casoId)
+        .single()
+      data = fallback.data
+    }
+
     setCaso(data)
   }
 
