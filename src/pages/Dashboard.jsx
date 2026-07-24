@@ -4,12 +4,13 @@ import Casos from './Casos'
 import Clientes from './Clientes'
 import Documentos from './Documentos'
 import Audiencias from './Audiencias'
+import Juzgados from './Juzgados'
 import Mensajes from './Mensajes'
 import logo from '../assets/LOGO_RUBY_RAMOS_SIMBOLO.svg'
 import {
   LayoutDashboard, Briefcase, Users, FileText,
   Calendar, MessageSquare, LogOut, Menu, X,
-  TrendingUp, Clock, CheckCircle, AlertCircle
+  CheckCircle, AlertCircle, Landmark
 } from 'lucide-react'
 
 export default function Dashboard({ session }) {
@@ -20,6 +21,7 @@ export default function Dashboard({ session }) {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'casos', label: 'Casos', icon: Briefcase },
     { id: 'clientes', label: 'Clientes', icon: Users },
+    { id: 'juzgados', label: 'Juzgados', icon: Landmark },
     { id: 'documentos', label: 'Documentos', icon: FileText },
     { id: 'audiencias', label: 'Audiencias', icon: Calendar },
     { id: 'mensajes', label: 'Mensajes', icon: MessageSquare, disabled: true },
@@ -183,6 +185,7 @@ const fetchCasosRecientes = async () => {
 
           {activePage === 'casos' && <Casos session={session} />}
           {activePage === 'clientes' && <Clientes session={session} />}
+          {activePage === 'juzgados' && <Juzgados />}
           {activePage === 'documentos' && <Documentos />}
           {activePage === 'audiencias' && <Audiencias />}
           {activePage === 'mensajes' && <Mensajes session={session} />}

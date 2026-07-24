@@ -9,6 +9,8 @@ export default function Clientes() {
   const [modalOpen, setModalOpen] = useState(false)
   const [modalEditar, setModalEditar] = useState(false)
   const [clienteEditar, setClienteEditar] = useState(null)
+  const [confirmarEliminar, setConfirmarEliminar] = useState(false)
+  const [eliminando, setEliminando] = useState(false)
   const [nuevo, setNuevo] = useState({
     nombre: '', apellido: '', documento: '',
     correo: '', telefono: '', direccion: '',
@@ -100,37 +102,32 @@ const editarCliente = async () => {
   if (!error) {
     setModalEditar(false)
     setClienteEditar(null)
+    setConfirmarEliminar(false)
     fetchClientes()
   }
-}  
+}
 
-{modalEditar && clienteEditar && (
-  <div style={styles.overlay}>
-    <div style={styles.modal}>
-      <div style={styles.modalHeader}>
-        <h3>Editar Cliente</h3>
-        <button style={styles.closeBtn} onClick={() => setModalEditar(false)}><X size={20} /></button>
-      </div>
-      <div style={styles.form}>
-        <select style={styles.input} value={clienteEditar.tipo_persona} onChange={e => setClienteEditar({ ...clienteEditar, tipo_persona: e.target.value })}>
-          <option value="natural">Persona Natural</option>
-          <option value="juridica">Persona Jurídica</option>
-        </select>
-        <div style={styles.row}>
-          <input style={styles.input} placeholder="Nombre *" value={clienteEditar.nombre || ''} onChange={e => setClienteEditar({ ...clienteEditar, nombre: e.target.value })} />
-          <input style={styles.input} placeholder="Apellido" value={clienteEditar.apellido || ''} onChange={e => setClienteEditar({ ...clienteEditar, apellido: e.target.value })} />
-        </div>
-        <input style={styles.input} placeholder="Documento (CC/NIT)" value={clienteEditar.documento || ''} onChange={e => setClienteEditar({ ...clienteEditar, documento: e.target.value })} />
-        <input style={styles.input} placeholder="Correo" type="email" value={clienteEditar.correo || ''} onChange={e => setClienteEditar({ ...clienteEditar, correo: e.target.value })} />
-        <input style={styles.input} placeholder="Teléfono" value={clienteEditar.telefono || ''} onChange={e => setClienteEditar({ ...clienteEditar, telefono: e.target.value })} />
-        <input style={styles.input} placeholder="Ciudad" value={clienteEditar.ciudad || ''} onChange={e => setClienteEditar({ ...clienteEditar, ciudad: e.target.value })} />
-        <input style={styles.input} placeholder="Dirección" value={clienteEditar.direccion || ''} onChange={e => setClienteEditar({ ...clienteEditar, direccion: e.target.value })} />
-        <button style={styles.btnGuardar} onClick={editarCliente}>Guardar Cambios</button>
-      </div>
-    </div>
-  </div>
-)}
-  
+  const eliminarCliente = async () => {
+    if (!clienteEditar?.id) return
+    setEliminando(true)
+    const { error } = await supabase.from('clients').delete().eq('id', clienteEditar.id)
+    setEliminando(false)
+    if (error) {
+      alert('No se pudo eliminar. Puede tener casos asociados.')
+      return
+    }
+    setModalEditar(false)
+    setClienteEditar(null)
+    setConfirmarEliminar(false)
+    fetchClientes()
+  }
+
+  const cerrarEditar = () => {
+    setModalEditar(false)
+    setClienteEditar(null)
+    setConfirmarEliminar(false)
+  }
+
   return (
     <div>
       <div style={styles.header}>
@@ -184,7 +181,7 @@ const editarCliente = async () => {
                 </span>
                 <button
                   style={styles.btnEditar}
-                  onClick={() => { setClienteEditar(cliente); setModalEditar(true) }}
+                  onClick={() => { setClienteEditar(cliente); setConfirmarEliminar(false); setModalEditar(true) }}
                 >
                   ✏️
                 </button>
@@ -238,7 +235,7 @@ const editarCliente = async () => {
           <div style={styles.modal}>
             <div style={styles.modalHeader}>
               <h3>Editar Cliente</h3>
-              <button style={styles.closeBtn} onClick={() => setModalEditar(false)}><X size={20} /></button>
+              <button style={styles.closeBtn} onClick={cerrarEditar}><X size={20} /></button>
             </div>
             <div style={styles.form}>
               <select style={styles.input} value={clienteEditar.tipo_persona} onChange={e => setClienteEditar({ ...clienteEditar, tipo_persona: e.target.value })}>
@@ -255,6 +252,26 @@ const editarCliente = async () => {
               <input style={styles.input} placeholder="Ciudad" value={clienteEditar.ciudad || ''} onChange={e => setClienteEditar({ ...clienteEditar, ciudad: e.target.value })} />
               <input style={styles.input} placeholder="Dirección" value={clienteEditar.direccion || ''} onChange={e => setClienteEditar({ ...clienteEditar, direccion: e.target.value })} />
               <button style={styles.btnGuardar} onClick={editarCliente}>Guardar Cambios</button>
+
+              {!confirmarEliminar ? (
+                <button style={styles.btnEliminar} onClick={() => setConfirmarEliminar(true)}>
+                  Eliminar cliente
+                </button>
+              ) : (
+                <div style={styles.confirmBox}>
+                  <p style={styles.confirmText}>
+                    ¿Seguro que deseas eliminar a <strong>{clienteEditar.nombre} {clienteEditar.apellido || ''}</strong>? Esta acción no se puede deshacer.
+                  </p>
+                  <div style={styles.confirmActions}>
+                    <button style={styles.btnCancelar} onClick={() => setConfirmarEliminar(false)} disabled={eliminando}>
+                      Cancelar
+                    </button>
+                    <button style={styles.btnConfirmarEliminar} onClick={eliminarCliente} disabled={eliminando}>
+                      {eliminando ? 'Eliminando...' : 'Sí, eliminar definitivamente'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -287,4 +304,10 @@ const styles = {
   input: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9', fontSize: '14px', outline: 'none', width: '100%' },
   btnGuardar: { backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' },
   btnEditar: { background: 'none', border: '1px solid #dfe6e9', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '14px' },
+  btnEliminar: { backgroundColor: '#fff', color: '#d63031', border: '1px solid #d63031', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' },
+  confirmBox: { backgroundColor: '#fff5f5', border: '1px solid #fab1a0', borderRadius: '8px', padding: '14px' },
+  confirmText: { fontSize: '13px', color: '#636e72', marginBottom: '12px', lineHeight: 1.4 },
+  confirmActions: { display: 'flex', gap: '8px' },
+  btnCancelar: { flex: 1, backgroundColor: '#fff', color: '#636e72', border: '1px solid #dfe6e9', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
+  btnConfirmarEliminar: { flex: 1, backgroundColor: '#d63031', color: '#fff', border: 'none', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
 }

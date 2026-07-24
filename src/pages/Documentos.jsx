@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { Search, FileText, Download, Eye, X } from 'lucide-react'
+import { Search, FileText, Download, Eye, X, Trash2 } from 'lucide-react'
 
 export default function Documentos() {
   const [documentos, setDocumentos] = useState([])
@@ -10,6 +10,8 @@ export default function Documentos() {
   const [filtroCaso, setFiltroCaso] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
   const [vista, setVista] = useState(null)
+  const [docEliminar, setDocEliminar] = useState(null)
+  const [eliminando, setEliminando] = useState(false)
 
   useEffect(() => {
     fetchDocumentos()
@@ -58,6 +60,21 @@ export default function Documentos() {
   const cerrarVista = () => {
     if (vista?.url) URL.revokeObjectURL(vista.url)
     setVista(null)
+  }
+
+  const eliminarDocumento = async () => {
+    if (!docEliminar) return
+    setEliminando(true)
+    await supabase.storage.from('documentos').remove([docEliminar.url])
+    const { error } = await supabase.from('documents').delete().eq('id', docEliminar.id)
+    setEliminando(false)
+    if (error) {
+      alert('No se pudo eliminar el documento.')
+      return
+    }
+    if (vista?.id === docEliminar.id) cerrarVista()
+    setDocEliminar(null)
+    fetchDocumentos()
   }
 
   const esImagen = (tipo) => tipo?.startsWith('image/')
@@ -137,9 +154,26 @@ export default function Documentos() {
                 <button style={styles.btnDescargar} onClick={() => descargarArchivo(doc)}>
                   <Download size={14} />
                 </button>
+                <button style={styles.btnEliminar} onClick={() => setDocEliminar(doc)}>
+                  <Trash2 size={14} />
+                </button>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {docEliminar && (
+        <div style={styles.confirmBox}>
+          <p style={styles.confirmText}>
+            ¿Eliminar <strong>{docEliminar.nombre}</strong>? Esta acción no se puede deshacer.
+          </p>
+          <div style={styles.confirmActions}>
+            <button style={styles.btnCancelar} onClick={() => setDocEliminar(null)} disabled={eliminando}>Cancelar</button>
+            <button style={styles.btnConfirmarEliminar} onClick={eliminarDocumento} disabled={eliminando}>
+              {eliminando ? 'Eliminando...' : 'Sí, eliminar definitivamente'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -174,8 +208,8 @@ const styles = {
   statPill: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#fff', padding: '8px 16px', borderRadius: '20px', fontSize: '13px', color: '#636e72', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   empty: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px', backgroundColor: '#fff', borderRadius: '12px' },
   tabla: { backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflow: 'hidden' },
-  tablaHeader: { display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 160px', padding: '12px 20px', backgroundColor: '#f8f9fa', fontSize: '12px', fontWeight: '600', color: '#b2bec3', textTransform: 'uppercase' },
-  tablaFila: { display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 160px', padding: '16px 20px', borderTop: '1px solid #f0f2f5', alignItems: 'center' },
+  tablaHeader: { display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 200px', padding: '12px 20px', backgroundColor: '#f8f9fa', fontSize: '12px', fontWeight: '600', color: '#b2bec3', textTransform: 'uppercase' },
+  tablaFila: { display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 200px', padding: '16px 20px', borderTop: '1px solid #f0f2f5', alignItems: 'center' },
   docNombre: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#2d3436' },
   icono: { fontSize: '18px' },
   casoTag: { fontSize: '13px', color: '#636e72', backgroundColor: '#f0f2f5', padding: '4px 10px', borderRadius: '20px', display: 'inline-block' },
@@ -183,6 +217,12 @@ const styles = {
   acciones: { display: 'flex', gap: '8px', alignItems: 'center' },
   btnVer: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#c9a84c20', color: '#c9a84c', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
   btnDescargar: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#0984e320', color: '#0984e3', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
+  btnEliminar: { display: 'flex', alignItems: 'center', backgroundColor: '#d6303120', color: '#d63031', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer' },
+  confirmBox: { marginTop: '16px', backgroundColor: '#fff5f5', border: '1px solid #fab1a0', borderRadius: '8px', padding: '14px' },
+  confirmText: { fontSize: '13px', color: '#636e72', marginBottom: '12px', lineHeight: 1.4 },
+  confirmActions: { display: 'flex', gap: '8px' },
+  btnCancelar: { flex: 1, backgroundColor: '#fff', color: '#636e72', border: '1px solid #dfe6e9', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
+  btnConfirmarEliminar: { flex: 1, backgroundColor: '#d63031', color: '#fff', border: 'none', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
   viewerBox: { marginTop: '20px', border: '1px solid #dfe6e9', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   viewerHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #dfe6e9' },
   closeBtn: { background: 'none', border: 'none', cursor: 'pointer' },

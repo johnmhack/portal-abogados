@@ -11,21 +11,25 @@ export default function Casos({ session }) {
   const [modalOpen, setModalOpen] = useState(false)
   const [casoSeleccionado, setCasoSeleccionado] = useState(null)
   const [procesosTypes, setProcesosTypes] = useState([])
+  const [juzgados, setJuzgados] = useState([])
+  const [nuevoJuzgadoNombre, setNuevoJuzgadoNombre] = useState('')
+  const [creandoJuzgado, setCreandoJuzgado] = useState(false)
   const [nuevo, setNuevo] = useState({
     titulo: '', descripcion: '', numero_radicado: '',
-    ciudad: '', status: 'activo', client_id: ''
+    ciudad: '', status: 'activo', client_id: '', juzgado_id: ''
   })
 
   useEffect(() => {
     fetchCasos()
     fetchProcesosTypes()
     fetchClientes()
+    fetchJuzgados()
   }, [])
 
   const fetchCasos = async () => {
     const { data } = await supabase
       .from('cases')
-      .select('*, clients(nombre, apellido)')
+      .select('*, clients(nombre, apellido), juzgados(nombre, ciudad)')
       .order('creado_en', { ascending: false })
     setCasos(data || [])
     setLoading(false)
@@ -44,11 +48,35 @@ export default function Casos({ session }) {
     setClientes(data || [])
   }
 
+  const fetchJuzgados = async () => {
+    const { data } = await supabase.from('juzgados').select('id, nombre, ciudad').order('nombre')
+    setJuzgados(data || [])
+  }
+
+  const crearJuzgadoRapido = async () => {
+    if (!nuevoJuzgadoNombre.trim()) return
+    setCreandoJuzgado(true)
+    const { data, error } = await supabase
+      .from('juzgados')
+      .insert([{ nombre: nuevoJuzgadoNombre.trim(), ciudad: nuevo.ciudad || null }])
+      .select()
+      .single()
+    setCreandoJuzgado(false)
+    if (error) {
+      alert('Error al crear juzgado: ' + error.message)
+      return
+    }
+    await fetchJuzgados()
+    setNuevo({ ...nuevo, juzgado_id: data.id })
+    setNuevoJuzgadoNombre('')
+  }
+
   const crearCaso = async () => {
   if (!nuevo.titulo) return
   const datos = { ...nuevo }
   if (!datos.client_id) delete datos.client_id
   if (!datos.process_type_id) delete datos.process_type_id
+  if (!datos.juzgado_id) delete datos.juzgado_id
 
   // Crear el caso
   const { data: casoCreado, error } = await supabase
@@ -91,7 +119,8 @@ export default function Casos({ session }) {
   }
 
   setModalOpen(false)
-  setNuevo({ titulo: '', descripcion: '', numero_radicado: '', ciudad: '', status: 'activo', client_id: '', process_type_id: '' })
+  setNuevo({ titulo: '', descripcion: '', numero_radicado: '', ciudad: '', status: 'activo', client_id: '', process_type_id: '', juzgado_id: '' })
+  setNuevoJuzgadoNombre('')
   fetchCasos()
 
 }
@@ -150,7 +179,7 @@ export default function Casos({ session }) {
               <p style={styles.cardDesc}>{caso.descripcion}</p>
               <div style={styles.cardFooter}>
                 <span style={styles.tag}>{caso.clients ? `${caso.clients.nombre} ${caso.clients.apellido || ''}` : 'Sin cliente'}</span>
-                <span style={styles.ciudad}>{caso.ciudad}</span>
+                <span style={styles.ciudad}>{caso.juzgados?.nombre || caso.ciudad || ''}</span>
               </div>
             </div>
           ))}
@@ -175,6 +204,28 @@ export default function Casos({ session }) {
               </select>
               <input style={styles.input} placeholder="Número de radicado" value={nuevo.numero_radicado} onChange={e => setNuevo({ ...nuevo, numero_radicado: e.target.value })} />
               <input style={styles.input} placeholder="Ciudad" value={nuevo.ciudad} onChange={e => setNuevo({ ...nuevo, ciudad: e.target.value })} />
+              <select style={styles.input} value={nuevo.juzgado_id || ''} onChange={e => setNuevo({ ...nuevo, juzgado_id: e.target.value })}>
+                <option value="">Seleccionar juzgado</option>
+                {juzgados.map(j => (
+                  <option key={j.id} value={j.id}>{j.nombre}{j.ciudad ? ` (${j.ciudad})` : ''}</option>
+                ))}
+              </select>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  style={styles.input}
+                  placeholder="O crear juzgado nuevo..."
+                  value={nuevoJuzgadoNombre}
+                  onChange={e => setNuevoJuzgadoNombre(e.target.value)}
+                />
+                <button
+                  type="button"
+                  style={styles.btnCrearJuzgado}
+                  onClick={crearJuzgadoRapido}
+                  disabled={creandoJuzgado || !nuevoJuzgadoNombre.trim()}
+                >
+                  {creandoJuzgado ? '...' : 'Crear'}
+                </button>
+              </div>
               <select 
                 style={styles.input} 
                 value={nuevo.process_type_id || ''} 
@@ -234,5 +285,6 @@ const styles = {
   closeBtn: { background: 'none', border: 'none', cursor: 'pointer' },
   form: { display: 'flex', flexDirection: 'column', gap: '12px' },
   input: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9', fontSize: '14px', outline: 'none', width: '100%' },
+  btnCrearJuzgado: { backgroundColor: '#c9a84c', color: '#1a1a2e', border: 'none', padding: '10px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap' },
   btnGuardar: { backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' }
 }
