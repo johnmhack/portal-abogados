@@ -46,7 +46,7 @@ export default function InformeCliente({ casoId, onClose }) {
         {/* HEADER */}
         <div style={styles.header}>
           <div>
-            <h2 style={styles.titulo}>SAR Abogados Especializados</h2>
+            <h2 style={styles.titulo}>SAR Consultores Integrales</h2>
             <p style={styles.subtitulo}>Informe de estado del proceso</p>
           </div>
           <div style={styles.headerBtns}>
@@ -125,7 +125,7 @@ export default function InformeCliente({ casoId, onClose }) {
 
         {/* FOOTER */}
         <div style={styles.footer}>
-          <p>Informe generado el {new Date().toLocaleDateString('es-CO')} — SAR Abogados Especializados</p>
+          <p>Informe generado el {new Date().toLocaleDateString('es-CO')} — SAR Consultores Integrales</p>
           <p>Este documento es confidencial y de uso exclusivo del cliente.</p>
         </div>
       </div>

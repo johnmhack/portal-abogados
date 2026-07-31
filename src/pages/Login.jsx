@@ -43,7 +43,7 @@ export default function Login() {
       <div style={styles.container}>
         <div style={styles.card}>
           <div style={styles.logoBox}>
-            <img src={logo} alt="SAR Abogados" style={styles.logo} />
+            <img src={logo} alt="SAR Consultores Integrales" style={styles.logo} />
           </div>
           <h2 style={styles.title}>Recuperar contraseña</h2>
           <p style={styles.subtitle}>Te enviaremos un enlace a tu correo</p>
@@ -75,7 +75,7 @@ export default function Login() {
           <p style={styles.linkText} onClick={() => { setForgotMode(false); setForgotSent(false); setError('') }}>
             ← Volver al login
           </p>
-          <p style={styles.footer}>© 2025 SAR Abogados Especializados</p>
+          <p style={styles.footer}>© 2025 SAR Consultores Integrales</p>
         </div>
       </div>
     )
@@ -86,9 +86,9 @@ export default function Login() {
       <div style={styles.overlay} />
       <div style={styles.card}>
         <div style={styles.logoBox}>
-          <img src={logo} alt="SAR Abogados" style={styles.logo} />
+          <img src={logo} alt="SAR Consultores Integrales" style={styles.logo} />
         </div>
-        <h2 style={styles.title}>SAR Abogados</h2>
+        <h2 style={styles.title}>SAR Consultores Integrales</h2>
         <p style={styles.subtitle}>Portal interno</p>
 
         <form onSubmit={handleLogin}>
@@ -147,7 +147,7 @@ export default function Login() {
           </button>
         </form>
 
-        <p style={styles.footer}>© 2025 SAR Abogados Especializados</p>
+        <p style={styles.footer}>© 2025 SAR Consultores Integrales</p>
       </div>
     </div>
   )

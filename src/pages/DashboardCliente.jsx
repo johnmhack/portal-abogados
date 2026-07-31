@@ -42,7 +42,7 @@ export default function DashboardCliente({ session, userProfile }) {
       {/* TOPBAR */}
       <div style={styles.topbar}>
         <div>
-          <h1 style={styles.titulo}>SAR Abogados</h1>
+          <h1 style={styles.titulo}>SAR Consultores Integrales</h1>
           <p style={styles.subtitulo}>Portal del Cliente</p>
         </div>
         <div style={styles.topRight}>

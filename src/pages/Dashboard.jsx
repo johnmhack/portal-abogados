@@ -69,7 +69,7 @@ const fetchCasosRecientes = async () => {
     audiencias: 'Agenda y citaciones',
     mensajes: 'Comunicaciones',
   }
-  const pageSubtitle = pageSubtitles[activePage] || 'SAR Abogados'
+  const pageSubtitle = pageSubtitles[activePage] || 'SAR Consultores Integrales'
   const iniciales = `${userProfile?.nombre?.[0] || session.user.email?.[0] || ''}${userProfile?.apellido?.[0] || ''}`.toUpperCase()
 
   return (
@@ -90,7 +90,7 @@ const fetchCasosRecientes = async () => {
           }}>
             <img
               src={logo}
-              alt="SAR Abogados"
+              alt="SAR Consultores Integrales"
               style={{
                 height: sidebarOpen ? '44px' : '36px',
                 width: 'auto',
@@ -100,7 +100,7 @@ const fetchCasosRecientes = async () => {
             />
             {sidebarOpen && (
               <div style={styles.logoText}>
-                <span style={styles.logoSub}>Abogados</span>
+                <span style={styles.logoSub}>Consultores Integrales</span>
               </div>
             )}
           </div>
@@ -153,7 +153,7 @@ const fetchCasosRecientes = async () => {
           <div>
             {isHome ? (
               <>
-                <p style={styles.brandLine}>SAR Abogados</p>
+                <p style={styles.brandLine}>SAR Consultores Integrales</p>
                 <h1 style={styles.pageTitleHome}>
                   {saludo}, {nombreUsuario}
                 </h1>
@@ -161,7 +161,7 @@ const fetchCasosRecientes = async () => {
               </>
             ) : (
               <>
-                <p style={styles.brandLine}>SAR Abogados</p>
+                <p style={styles.brandLine}>SAR Consultores Integrales</p>
                 <h1 style={styles.pageTitle}>{pageLabel}</h1>
                 <p style={styles.pageSubtitle}>{pageSubtitle}</p>
                 <div style={styles.titleAccent} />
@@ -323,10 +323,12 @@ const styles = {
   },
   logoSub: {
     color: 'rgba(255,255,255,0.7)',
-    fontSize: '13px',
+    fontSize: '11px',
     fontWeight: '600',
-    letterSpacing: '0.14em',
+    letterSpacing: '0.06em',
     textTransform: 'uppercase',
+    lineHeight: 1.2,
+    maxWidth: '140px',
   },
   sidebarTitle: { color: '#c9a84c', fontSize: '24px', fontWeight: '700' },
   sidebarSubtitle: { color: '#a0aec0', fontSize: '12px' },

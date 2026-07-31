@@ -55,7 +55,7 @@ export default function DashboardAdmin({ session, userProfile }) {
         <div style={styles.topbar}>
           <div>
             <h1 style={styles.pageTitle}>{menuItems.find(m => m.id === activePage)?.label}</h1>
-            <p style={styles.pageSubtitle}>Panel de Administración — SAR Abogados</p>
+            <p style={styles.pageSubtitle}>Panel de Administración — SAR Consultores Integrales</p>
           </div>
           <div style={styles.userInfo}>
             <div style={styles.avatar}>{userProfile.nombre[0]}</div>
