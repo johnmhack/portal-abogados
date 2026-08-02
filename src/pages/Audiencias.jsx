@@ -21,6 +21,15 @@ const formVacio = {
   notas: '',
 }
 
+/** Convierte ISO (UTC) a valor local para input datetime-local */
+function toDatetimeLocalValue(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 export default function Audiencias() {
   const [audiencias, setAudiencias] = useState([])
   const [casos, setCasos] = useState([])
@@ -50,8 +59,21 @@ export default function Audiencias() {
   }
 
   const fetchCasos = async () => {
-    const { data } = await supabase.from('cases').select('id, titulo').order('titulo')
+    const { data } = await supabase
+      .from('cases')
+      .select('id, titulo, numero_radicado, clients(nombre, apellido)')
+      .order('titulo')
     setCasos(data || [])
+  }
+
+  const etiquetaCaso = (c) => {
+    const cliente = c.clients
+      ? `${c.clients.nombre || ''} ${c.clients.apellido || ''}`.trim()
+      : ''
+    const partes = [c.titulo]
+    if (cliente) partes.push(cliente)
+    if (c.numero_radicado) partes.push(`Rad. ${c.numero_radicado}`)
+    return partes.join(' — ')
   }
 
   const abrirNuevo = () => {
@@ -67,7 +89,7 @@ export default function Audiencias() {
       case_id: a.case_id || '',
       titulo: a.titulo || '',
       descripcion: a.descripcion || '',
-      fecha_hora: a.fecha_hora ? a.fecha_hora.slice(0, 16) : '',
+      fecha_hora: toDatetimeLocalValue(a.fecha_hora),
       lugar: a.lugar || '',
       juzgado: a.juzgado || '',
       tipo: a.tipo || 'presencial',
@@ -182,7 +204,7 @@ export default function Audiencias() {
         </div>
         <select style={styles.select} value={filtroCaso} onChange={e => setFiltroCaso(e.target.value)}>
           <option value="">Todos los casos</option>
-          {casos.map(c => <option key={c.id} value={c.id}>{c.titulo}</option>)}
+          {casos.map(c => <option key={c.id} value={c.id}>{etiquetaCaso(c)}</option>)}
         </select>
         <select style={styles.select} value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
           <option value="">Todos los estados</option>
@@ -240,7 +262,7 @@ export default function Audiencias() {
             <div style={styles.form}>
               <select style={styles.input} value={form.case_id} onChange={e => setForm({ ...form, case_id: e.target.value })}>
                 <option value="">Seleccionar caso *</option>
-                {casos.map(c => <option key={c.id} value={c.id}>{c.titulo}</option>)}
+                {casos.map(c => <option key={c.id} value={c.id}>{etiquetaCaso(c)}</option>)}
               </select>
               <input style={styles.input} placeholder="Título *" value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} />
               <input

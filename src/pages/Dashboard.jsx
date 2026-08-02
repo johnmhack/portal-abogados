@@ -15,8 +15,12 @@ import {
 
 export default function Dashboard({ session, userProfile }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [activePage, setActivePage] = useState('dashboard')
+  const [activePage, setActivePage] = useState(() => sessionStorage.getItem('sar_active_page') || 'dashboard')
   const [casoInicialId, setCasoInicialId] = useState(null)
+
+  useEffect(() => {
+    sessionStorage.setItem('sar_active_page', activePage)
+  }, [activePage])
 
   const menuItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },

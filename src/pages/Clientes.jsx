@@ -14,7 +14,8 @@ export default function Clientes() {
   const [nuevo, setNuevo] = useState({
     nombre: '', apellido: '', documento: '',
     correo: '', telefono: '', direccion: '',
-    ciudad: '', tipo_persona: 'natural'
+    ciudad: '', tipo_persona: 'natural',
+    calidad_procesal: 'demandante'
   })
 
   useEffect(() => { fetchClientes() }, [])
@@ -38,7 +39,8 @@ export default function Clientes() {
       telefono: nuevo.telefono,
       ciudad: nuevo.ciudad,
       direccion: nuevo.direccion,
-      tipo_persona: nuevo.tipo_persona
+      tipo_persona: nuevo.tipo_persona,
+      calidad_procesal: nuevo.calidad_procesal || null
     }])
     .select()
     .single()
@@ -74,7 +76,7 @@ export default function Clientes() {
   }
 
   setModalOpen(false)
-  setNuevo({ nombre: '', apellido: '', documento: '', correo: '', telefono: '', direccion: '', ciudad: '', tipo_persona: 'natural', crearAcceso: false })
+  setNuevo({ nombre: '', apellido: '', documento: '', correo: '', telefono: '', direccion: '', ciudad: '', tipo_persona: 'natural', calidad_procesal: 'demandante', crearAcceso: false })
   fetchClientes()
 }
 
@@ -96,7 +98,8 @@ const editarCliente = async () => {
       telefono: clienteEditar.telefono,
       ciudad: clienteEditar.ciudad,
       direccion: clienteEditar.direccion,
-      tipo_persona: clienteEditar.tipo_persona
+      tipo_persona: clienteEditar.tipo_persona,
+      calidad_procesal: clienteEditar.calidad_procesal || null
     })
     .eq('id', clienteEditar.id)
   if (!error) {
@@ -157,6 +160,10 @@ const editarCliente = async () => {
           {clientesFiltrados.map(cliente => {
             const esJuridica = cliente.tipo_persona === 'juridica'
             const tipoColor = esJuridica ? '#0984e3' : '#00b894'
+            const esDemandante = cliente.calidad_procesal === 'demandante'
+            const esDemandado = cliente.calidad_procesal === 'demandado'
+            const calidadColor = esDemandante ? '#6c5ce7' : esDemandado ? '#e17055' : '#636e72'
+            const calidadLabel = esDemandante ? 'Demandante' : esDemandado ? 'Demandado' : null
             return (
               <div key={cliente.id} style={styles.card}>
                 <div style={styles.avatar}>
@@ -165,9 +172,16 @@ const editarCliente = async () => {
                 <div style={styles.cardInfo}>
                   <div style={styles.cardTop}>
                     <h3 style={styles.cardName}>{cliente.nombre} {cliente.apellido}</h3>
-                    <span style={{ ...styles.badge, backgroundColor: tipoColor + '18', color: tipoColor }}>
-                      {esJuridica ? 'Jurídica' : 'Natural'}
-                    </span>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <span style={{ ...styles.badge, backgroundColor: tipoColor + '18', color: tipoColor }}>
+                        {esJuridica ? 'Jurídica' : 'Natural'}
+                      </span>
+                      {calidadLabel && (
+                        <span style={{ ...styles.badge, backgroundColor: calidadColor + '18', color: calidadColor }}>
+                          {calidadLabel}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {cliente.documento && <p style={styles.cardDoc}>Doc: {cliente.documento}</p>}
                   <div style={styles.cardDetails}>
@@ -213,6 +227,10 @@ const editarCliente = async () => {
                 <option value="natural">Persona Natural</option>
                 <option value="juridica">Persona Jurídica</option>
               </select>
+              <select style={styles.input} value={nuevo.calidad_procesal} onChange={e => setNuevo({ ...nuevo, calidad_procesal: e.target.value })}>
+                <option value="demandante">Demandante</option>
+                <option value="demandado">Demandado</option>
+              </select>
               <div style={styles.row}>
                 <input style={styles.input} placeholder="Nombre *" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} />
                 <input style={styles.input} placeholder="Apellido" value={nuevo.apellido} onChange={e => setNuevo({ ...nuevo, apellido: e.target.value })} />
@@ -248,9 +266,14 @@ const editarCliente = async () => {
               <button style={styles.closeBtn} onClick={cerrarEditar}><X size={20} /></button>
             </div>
             <div style={styles.form}>
-              <select style={styles.input} value={clienteEditar.tipo_persona} onChange={e => setClienteEditar({ ...clienteEditar, tipo_persona: e.target.value })}>
+              <select style={styles.input} value={clienteEditar.tipo_persona || 'natural'} onChange={e => setClienteEditar({ ...clienteEditar, tipo_persona: e.target.value })}>
                 <option value="natural">Persona Natural</option>
                 <option value="juridica">Persona Jurídica</option>
+              </select>
+              <select style={styles.input} value={clienteEditar.calidad_procesal || ''} onChange={e => setClienteEditar({ ...clienteEditar, calidad_procesal: e.target.value })}>
+                <option value="">Sin definir</option>
+                <option value="demandante">Demandante</option>
+                <option value="demandado">Demandado</option>
               </select>
               <div style={styles.row}>
                 <input style={styles.input} placeholder="Nombre *" value={clienteEditar.nombre || ''} onChange={e => setClienteEditar({ ...clienteEditar, nombre: e.target.value })} />

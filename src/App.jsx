@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabase'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -9,36 +9,55 @@ function App() {
   const [session, setSession] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const profileLoaded = useRef(false)
 
   useEffect(() => {
+    let mounted = true
+
+    const fetchProfile = async (authId, { showLoading = false } = {}) => {
+      if (showLoading) setLoading(true)
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('auth_id', authId)
+        .single()
+      if (!mounted) return
+      setUserProfile(data)
+      profileLoaded.current = true
+      setLoading(false)
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return
       setSession(session)
-      if (session) fetchProfile(session.user.id)
+      if (session) fetchProfile(session.user.id, { showLoading: true })
       else setLoading(false)
     })
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return
       setSession(session)
-      if (session) {
-        setLoading(true)
-        fetchProfile(session.user.id)
-      } else {
+
+      // Al volver a la pestaña Supabase refresca el token; no recargar toda la app
+      if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return
+
+      if (event === 'SIGNED_OUT' || !session) {
         setUserProfile(null)
+        profileLoaded.current = false
         setLoading(false)
+        return
+      }
+
+      if (event === 'SIGNED_IN') {
+        fetchProfile(session.user.id, { showLoading: !profileLoaded.current })
       }
     })
-  }, [])
 
-  const fetchProfile = async (authId) => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('users')
-      .select('*')
-      .eq('auth_id', authId)
-      .single()
-    setUserProfile(data)
-    setLoading(false)
-  }
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [])
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f6fa' }}>

@@ -22,7 +22,7 @@ export default function DetalleCaso({ casoId, onBack }) {
   const fetchCaso = async () => {
     let { data, error } = await supabase
       .from('cases')
-      .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion), juzgados(id, nombre, ciudad, especialidad)')
+      .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion, calidad_procesal), juzgados(id, nombre, ciudad, especialidad)')
       .eq('id', casoId)
       .single()
 
@@ -30,7 +30,7 @@ export default function DetalleCaso({ casoId, onBack }) {
       console.log('fetchCaso con juzgados:', error.message)
       const fallback = await supabase
         .from('cases')
-        .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion)')
+        .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion, calidad_procesal)')
         .eq('id', casoId)
         .single()
       data = fallback.data
@@ -62,7 +62,8 @@ export default function DetalleCaso({ casoId, onBack }) {
       telefono: caso.clients?.telefono || '',
       documento: caso.clients?.documento || '',
       ciudad: caso.clients?.ciudad || '',
-      direccion: caso.clients?.direccion || ''
+      direccion: caso.clients?.direccion || '',
+      calidad_procesal: caso.clients?.calidad_procesal || ''
     })
     setNuevoJuzgadoNombre('')
     setConfirmarEliminar(false)
@@ -96,7 +97,11 @@ export default function DetalleCaso({ casoId, onBack }) {
     if (caso.client_id || editCaso.client_id) {
       const clientId = editCaso.client_id || caso.client_id
       if (clientId && editCliente.nombre.trim()) {
-        await supabase.from('clients').update(editCliente).eq('id', clientId)
+        const clienteUpdate = {
+          ...editCliente,
+          calidad_procesal: editCliente.calidad_procesal || null
+        }
+        await supabase.from('clients').update(clienteUpdate).eq('id', clientId)
       }
     }
     setGuardando(false)
@@ -168,7 +173,17 @@ export default function DetalleCaso({ casoId, onBack }) {
         <div style={styles.casoMeta}>
           <div style={styles.metaItem}>
             <span style={styles.metaLabel}>Cliente</span>
-            <span style={styles.metaValue}>{caso.clients ? `${caso.clients.nombre} ${caso.clients.apellido || ''}` : '—'}</span>
+            <span style={styles.metaValue}>
+              {caso.clients
+                ? `${caso.clients.nombre} ${caso.clients.apellido || ''}${
+                    caso.clients.calidad_procesal === 'demandante'
+                      ? ' (Demandante)'
+                      : caso.clients.calidad_procesal === 'demandado'
+                        ? ' (Demandado)'
+                        : ''
+                  }`
+                : '—'}
+            </span>
           </div>
           <div style={styles.metaItem}>
             <span style={styles.metaLabel}>Juzgado</span>
@@ -203,7 +218,7 @@ export default function DetalleCaso({ casoId, onBack }) {
                   const clientId = e.target.value
                   setEditCaso({ ...editCaso, client_id: clientId })
                   if (!clientId) {
-                    setEditCliente({ nombre: '', apellido: '', correo: '', telefono: '', documento: '', ciudad: '', direccion: '' })
+                    setEditCliente({ nombre: '', apellido: '', correo: '', telefono: '', documento: '', ciudad: '', direccion: '', calidad_procesal: '' })
                     return
                   }
                   const { data } = await supabase.from('clients').select('*').eq('id', clientId).single()
@@ -215,7 +230,8 @@ export default function DetalleCaso({ casoId, onBack }) {
                       telefono: data.telefono || '',
                       documento: data.documento || '',
                       ciudad: data.ciudad || '',
-                      direccion: data.direccion || ''
+                      direccion: data.direccion || '',
+                      calidad_procesal: data.calidad_procesal || ''
                     })
                   }
                 }}
@@ -261,6 +277,15 @@ export default function DetalleCaso({ casoId, onBack }) {
               {(editCaso.client_id || caso.client_id) && (
                 <>
                   <p style={styles.sectionLabel}>Info del cliente</p>
+                  <select
+                    style={styles.input}
+                    value={editCliente.calidad_procesal || ''}
+                    onChange={e => setEditCliente({ ...editCliente, calidad_procesal: e.target.value })}
+                  >
+                    <option value="">Sin definir</option>
+                    <option value="demandante">Demandante</option>
+                    <option value="demandado">Demandado</option>
+                  </select>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <input style={styles.input} placeholder="Nombre" value={editCliente.nombre} onChange={e => setEditCliente({ ...editCliente, nombre: e.target.value })} />
                     <input style={styles.input} placeholder="Apellido" value={editCliente.apellido} onChange={e => setEditCliente({ ...editCliente, apellido: e.target.value })} />
