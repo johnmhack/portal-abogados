@@ -5,6 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const ALLOWED_ROLES = ['abogado', 'socio', 'asistente', 'cliente', 'admin', 'superadmin']
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -16,7 +18,16 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { nombre, apellido, email, telefono, rol } = await req.json()
+    const { nombre, apellido, email, telefono, rol, client_id } = await req.json()
+
+    if (!nombre || !email) {
+      throw new Error('nombre y email son obligatorios')
+    }
+
+    const rolFinal = rol || 'abogado'
+    if (!ALLOWED_ROLES.includes(rolFinal)) {
+      throw new Error('Rol no permitido: ' + rolFinal)
+    }
 
     // Crear usuario en Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -36,7 +47,8 @@ Deno.serve(async (req) => {
         apellido,
         email,
         telefono,
-        rol
+        rol: rolFinal,
+        client_id: client_id || null
       }])
 
     if (profileError) throw profileError

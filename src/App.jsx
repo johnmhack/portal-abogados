@@ -74,7 +74,9 @@ function App() {
   )
 
   if (userProfile.rol === 'cliente') return <DashboardCliente session={session} userProfile={userProfile} />
-  if (userProfile.rol === 'admin') return <DashboardAdmin session={session} userProfile={userProfile} />
+  if (['admin', 'superadmin'].includes(userProfile.rol)) {
+    return <DashboardAdmin session={session} userProfile={userProfile} />
+  }
 
   return <Dashboard session={session} userProfile={userProfile} />
 }

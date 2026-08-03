@@ -12,6 +12,7 @@ import {
   Calendar, MessageSquare, LogOut, Menu, X,
   CheckCircle, AlertCircle, Landmark
 } from 'lucide-react'
+import NotificacionesCampana from '../components/NotificacionesCampana'
 
 export default function Dashboard({ session, userProfile }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -42,10 +43,14 @@ const [casosRecientes, setCasosRecientes] = useState([])
 useEffect(() => {
   fetchStats()
   fetchCasosRecientes()
-}, [])
+}, [userProfile?.id])
 
 const fetchStats = async () => {
-  const { data } = await supabase.from('cases').select('status')
+  let query = supabase.from('cases').select('status')
+  if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+    query = query.eq('abogado_id', userProfile.id)
+  }
+  const { data } = await query
   if (!data) return
   setStats([
     { label: 'Casos Activos', value: data.filter(c => c.status === 'activo').length, icon: Briefcase, color: '#0984e3' },
@@ -56,7 +61,11 @@ const fetchStats = async () => {
 }
 
 const fetchCasosRecientes = async () => {
-  const { data } = await supabase.from('cases').select('*, clients(nombre, apellido)').order('creado_en', { ascending: false }).limit(5)
+  let query = supabase.from('cases').select('*, clients(nombre, apellido)').order('creado_en', { ascending: false }).limit(5)
+  if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+    query = query.eq('abogado_id', userProfile.id)
+  }
+  const { data } = await query
   setCasosRecientes(data || [])
 }
 
@@ -173,6 +182,10 @@ const fetchCasosRecientes = async () => {
             )}
           </div>
           <div style={styles.userInfo}>
+            <NotificacionesCampana
+              userProfile={userProfile}
+              onIrAudiencias={() => setActivePage('audiencias')}
+            />
             <div>
               <p style={styles.userName}>{nombreUsuario}{userProfile?.apellido ? ` ${userProfile.apellido}` : ''}</p>
               <p style={styles.userEmail}>{session.user.email}</p>
@@ -278,14 +291,15 @@ const fetchCasosRecientes = async () => {
           {activePage === 'casos' && (
             <Casos
               session={session}
+              userProfile={userProfile}
               casoInicialId={casoInicialId}
               onLimpiarCasoInicial={() => setCasoInicialId(null)}
             />
           )}
-          {activePage === 'clientes' && <Clientes session={session} />}
+          {activePage === 'clientes' && <Clientes session={session} userProfile={userProfile} />}
           {activePage === 'juzgados' && <Juzgados />}
-          {activePage === 'documentos' && <Documentos />}
-          {activePage === 'audiencias' && <Audiencias />}
+          {activePage === 'documentos' && <Documentos userProfile={userProfile} />}
+          {activePage === 'audiencias' && <Audiencias userProfile={userProfile} />}
           {activePage === 'mensajes' && <Mensajes session={session} />}
 
 

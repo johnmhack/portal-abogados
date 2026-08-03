@@ -3,7 +3,7 @@ import { supabase } from '../supabase'
 import { ArrowLeft, FileText, MessageSquare, Plus, X, TrendingUp, CheckSquare, Pencil, Eye, Download, Trash2 } from 'lucide-react'
 import InformeCliente from './InformeCliente'
 
-export default function DetalleCaso({ casoId, onBack }) {
+export default function DetalleCaso({ casoId, onBack, userProfile }) {
   const [caso, setCaso] = useState(null)
   const [tab, setTab] = useState('eventos')
   const [mostrarInforme, setMostrarInforme] = useState(false)
@@ -53,7 +53,8 @@ export default function DetalleCaso({ casoId, onBack }) {
       ciudad: caso.ciudad || '',
       status: caso.status || 'activo',
       client_id: caso.client_id || '',
-      juzgado_id: caso.juzgado_id || ''
+      juzgado_id: caso.juzgado_id || '',
+      abogado_id: caso.abogado_id || userProfile?.id || ''
     })
     setEditCliente({
       nombre: caso.clients?.nombre || '',
@@ -93,6 +94,7 @@ export default function DetalleCaso({ casoId, onBack }) {
     const casoUpdate = { ...editCaso }
     if (!casoUpdate.client_id) casoUpdate.client_id = null
     if (!casoUpdate.juzgado_id) casoUpdate.juzgado_id = null
+    if (!casoUpdate.abogado_id) casoUpdate.abogado_id = userProfile?.id || caso.abogado_id || null
     await supabase.from('cases').update(casoUpdate).eq('id', casoId)
     if (caso.client_id || editCaso.client_id) {
       const clientId = editCaso.client_id || caso.client_id

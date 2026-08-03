@@ -3,7 +3,7 @@ import { supabase } from '../supabase'
 import { Plus, Search, Briefcase, X } from 'lucide-react'
 import DetalleCaso from './DetalleCaso'
 
-export default function Casos({ session, casoInicialId = null, onLimpiarCasoInicial }) {
+export default function Casos({ session, userProfile, casoInicialId = null, onLimpiarCasoInicial }) {
   const [casos, setCasos] = useState([])
   const [clientes, setClientes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -34,18 +34,28 @@ export default function Casos({ session, casoInicialId = null, onLimpiarCasoInic
   }, [casoInicialId])
 
   const fetchCasos = async () => {
-    let { data, error } = await supabase
+    let query = supabase
       .from('cases')
       .select('*, clients(nombre, apellido), juzgados(nombre, ciudad)')
       .order('creado_en', { ascending: false })
 
+    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+      query = query.eq('abogado_id', userProfile.id)
+    }
+
+    let { data, error } = await query
+
     if (error) {
       console.log('fetchCasos con juzgados:', error.message)
-      const fallback = await supabase
+      let fallback = supabase
         .from('cases')
         .select('*, clients(nombre, apellido)')
         .order('creado_en', { ascending: false })
-      data = fallback.data
+      if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+        fallback = fallback.eq('abogado_id', userProfile.id)
+      }
+      const res = await fallback
+      data = res.data
     }
 
     setCasos(data || [])
@@ -61,7 +71,11 @@ export default function Casos({ session, casoInicialId = null, onLimpiarCasoInic
   }
 
   const fetchClientes = async () => {
-    const { data } = await supabase.from('clients').select('id, nombre, apellido')
+    let query = supabase.from('clients').select('id, nombre, apellido')
+    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+      query = query.eq('abogado_id', userProfile.id)
+    }
+    const { data } = await query
     setClientes(data || [])
   }
 
@@ -94,6 +108,7 @@ export default function Casos({ session, casoInicialId = null, onLimpiarCasoInic
   if (!datos.client_id) delete datos.client_id
   if (!datos.process_type_id) delete datos.process_type_id
   if (!datos.juzgado_id) delete datos.juzgado_id
+  if (userProfile?.id) datos.abogado_id = userProfile.id
 
   // Crear el caso
   const { data: casoCreado, error } = await supabase
@@ -102,7 +117,11 @@ export default function Casos({ session, casoInicialId = null, onLimpiarCasoInic
     .select()
     .single()
 
-  if (error) { console.log('error:', error); return }
+  if (error) {
+    console.log('error:', error)
+    alert('No se pudo crear el caso: ' + error.message)
+    return
+  }
 
   // Si tiene tipo de proceso, cargar etapas automáticamente
   if (nuevo.process_type_id && casoCreado) {
@@ -156,7 +175,7 @@ export default function Casos({ session, casoInicialId = null, onLimpiarCasoInic
     perdido: '#d63031'
   }
 
-  if (casoSeleccionado) return <DetalleCaso casoId={casoSeleccionado} onBack={() => setCasoSeleccionado(null)} />
+  if (casoSeleccionado) return <DetalleCaso casoId={casoSeleccionado} userProfile={userProfile} onBack={() => setCasoSeleccionado(null)} />
 
   return (
     <div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { Search, FileText, Download, Eye, X, Trash2, Image, File } from 'lucide-react'
 
-export default function Documentos() {
+export default function Documentos({ userProfile }) {
   const [documentos, setDocumentos] = useState([])
   const [casos, setCasos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -23,14 +23,23 @@ export default function Documentos() {
   const fetchDocumentos = async () => {
     const { data } = await supabase
       .from('documents')
-      .select('*, cases(titulo)')
+      .select('*, cases!inner(titulo, abogado_id)')
       .order('creado_en', { ascending: false })
-    setDocumentos(data || [])
+
+    let docs = data || []
+    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+      docs = docs.filter(d => d.cases?.abogado_id === userProfile.id)
+    }
+    setDocumentos(docs)
     setLoading(false)
   }
 
   const fetchCasos = async () => {
-    const { data } = await supabase.from('cases').select('id, titulo')
+    let query = supabase.from('cases').select('id, titulo')
+    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+      query = query.eq('abogado_id', userProfile.id)
+    }
+    const { data } = await query
     setCasos(data || [])
   }
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { Plus, Search, Users, X, Phone, Mail, Pencil } from 'lucide-react'
 
-export default function Clientes() {
+export default function Clientes({ userProfile }) {
   const [clientes, setClientes] = useState([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
@@ -21,7 +21,11 @@ export default function Clientes() {
   useEffect(() => { fetchClientes() }, [])
 
   const fetchClientes = async () => {
-    const { data } = await supabase.from('clients').select('*').order('creado_en', { ascending: false })
+    let query = supabase.from('clients').select('*').order('creado_en', { ascending: false })
+    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+      query = query.eq('abogado_id', userProfile.id)
+    }
+    const { data } = await query
     setClientes(data || [])
     setLoading(false)
   }
@@ -29,9 +33,7 @@ export default function Clientes() {
   const crearCliente = async () => {
   if (!nuevo.nombre) return
 
-  const { data: clienteCreado, error } = await supabase
-    .from('clients')
-    .insert([{
+  const payload = {
       nombre: nuevo.nombre,
       apellido: nuevo.apellido,
       documento: nuevo.documento,
@@ -41,11 +43,20 @@ export default function Clientes() {
       direccion: nuevo.direccion,
       tipo_persona: nuevo.tipo_persona,
       calidad_procesal: nuevo.calidad_procesal || null
-    }])
+  }
+  if (userProfile?.id) payload.abogado_id = userProfile.id
+
+  const { data: clienteCreado, error } = await supabase
+    .from('clients')
+    .insert([payload])
     .select()
     .single()
 
-  if (error) { console.log(error); return }
+  if (error) {
+    console.log(error)
+    alert('No se pudo crear el cliente: ' + error.message)
+    return
+  }
 
   if (nuevo.crearAcceso && nuevo.correo && clienteCreado) {
     try {

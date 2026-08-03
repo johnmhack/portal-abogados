@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { Search, Calendar, Plus, X, Pencil, Trash2 } from 'lucide-react'
+import { notificarAudiencia } from '../components/NotificacionesCampana'
 
 const ESTADOS = {
   programada: { label: 'Programada', color: '#0984e3' },
@@ -30,7 +31,7 @@ function toDatetimeLocalValue(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-export default function Audiencias() {
+export default function Audiencias({ userProfile }) {
   const [audiencias, setAudiencias] = useState([])
   const [casos, setCasos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -52,17 +53,26 @@ export default function Audiencias() {
   const fetchAudiencias = async () => {
     const { data } = await supabase
       .from('audiencias')
-      .select('*, cases(titulo, clients(nombre, apellido))')
+      .select('*, cases!inner(titulo, abogado_id, clients(nombre, apellido))')
       .order('fecha_hora', { ascending: true })
-    setAudiencias(data || [])
+
+    let rows = data || []
+    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+      rows = rows.filter(a => a.cases?.abogado_id === userProfile.id)
+    }
+    setAudiencias(rows)
     setLoading(false)
   }
 
   const fetchCasos = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from('cases')
       .select('id, titulo, numero_radicado, clients(nombre, apellido)')
       .order('titulo')
+    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+      query = query.eq('abogado_id', userProfile.id)
+    }
+    const { data } = await query
     setCasos(data || [])
   }
 
@@ -122,14 +132,20 @@ export default function Audiencias() {
       notas: form.notas || null,
       actualizado_en: new Date().toISOString(),
     }
-    const { error } = editando
-      ? await supabase.from('audiencias').update(payload).eq('id', editando.id)
-      : await supabase.from('audiencias').insert([payload])
+    const { data, error } = editando
+      ? await supabase.from('audiencias').update(payload).eq('id', editando.id).select('id').single()
+      : await supabase.from('audiencias').insert([payload]).select('id').single()
     setGuardando(false)
     if (error) {
       alert('Error al guardar: ' + error.message)
       return
     }
+    await notificarAudiencia({
+      caseId: payload.case_id,
+      tituloAudiencia: payload.titulo,
+      fechaHoraIso: payload.fecha_hora,
+      esEdicion: !!editando,
+    })
     cerrarModal()
     fetchAudiencias()
   }
