@@ -16,8 +16,10 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
   const [creandoJuzgado, setCreandoJuzgado] = useState(false)
   const [nuevo, setNuevo] = useState({
     titulo: '', descripcion: '', numero_radicado: '',
-    ciudad: '', status: 'activo', client_id: '', juzgado_id: ''
+    ciudad: '', status: 'activo', client_id: '', juzgado_id: '',
+    calidad_cliente: 'demandante'
   })
+  const [otrasPartes, setOtrasPartes] = useState([]) // { client_id, nombre, calidad }
 
   useEffect(() => {
     fetchCasos()
@@ -104,7 +106,8 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
 
   const crearCaso = async () => {
   if (!nuevo.titulo) return
-  const datos = { ...nuevo }
+  const { calidad_cliente, ...resto } = nuevo
+  const datos = { ...resto }
   if (!datos.client_id) delete datos.client_id
   if (!datos.process_type_id) delete datos.process_type_id
   if (!datos.juzgado_id) delete datos.juzgado_id
@@ -121,6 +124,37 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
     console.log('error:', error)
     alert('No se pudo crear el caso: ' + error.message)
     return
+  }
+
+  // Partes del proceso (demandante / demandado)
+  if (casoCreado) {
+    const partes = []
+    if (nuevo.client_id) {
+      const cli = clientes.find(c => c.id === nuevo.client_id)
+      partes.push({
+        case_id: casoCreado.id,
+        client_id: nuevo.client_id,
+        nombre: cli ? `${cli.nombre} ${cli.apellido || ''}`.trim() : null,
+        calidad: calidad_cliente || 'demandante',
+        es_nuestro_cliente: true,
+      })
+    }
+    otrasPartes.forEach(p => {
+      if (!p.calidad) return
+      if (!p.client_id && !p.nombre?.trim()) return
+      const cli = p.client_id ? clientes.find(c => c.id === p.client_id) : null
+      partes.push({
+        case_id: casoCreado.id,
+        client_id: p.client_id || null,
+        nombre: cli ? `${cli.nombre} ${cli.apellido || ''}`.trim() : (p.nombre || null),
+        calidad: p.calidad,
+        es_nuestro_cliente: false,
+      })
+    })
+    if (partes.length > 0) {
+      const { error: errPartes } = await supabase.from('case_parties').insert(partes)
+      if (errPartes) console.log('case_parties:', errPartes.message)
+    }
   }
 
   // Si tiene tipo de proceso, cargar etapas automáticamente
@@ -155,7 +189,8 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
   }
 
   setModalOpen(false)
-  setNuevo({ titulo: '', descripcion: '', numero_radicado: '', ciudad: '', status: 'activo', client_id: '', process_type_id: '', juzgado_id: '' })
+  setNuevo({ titulo: '', descripcion: '', numero_radicado: '', ciudad: '', status: 'activo', client_id: '', process_type_id: '', juzgado_id: '', calidad_cliente: 'demandante' })
+  setOtrasPartes([])
   setNuevoJuzgadoNombre('')
   fetchCasos()
 
@@ -248,11 +283,86 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
               <input style={styles.input} placeholder="Título del caso *" value={nuevo.titulo} onChange={e => setNuevo({ ...nuevo, titulo: e.target.value })} />
               <textarea style={{ ...styles.input, height: '80px', resize: 'none' }} placeholder="Descripción" value={nuevo.descripcion} onChange={e => setNuevo({ ...nuevo, descripcion: e.target.value })} />
               <select style={styles.input} value={nuevo.client_id} onChange={e => setNuevo({ ...nuevo, client_id: e.target.value })}>
-                <option value="">Seleccionar cliente</option>
+                <option value="">Seleccionar cliente (nuestro representado)</option>
                 {clientes.map(c => (
                   <option key={c.id} value={c.id}>{c.nombre} {c.apellido}</option>
                 ))}
               </select>
+              {nuevo.client_id && (
+                <select style={styles.input} value={nuevo.calidad_cliente} onChange={e => setNuevo({ ...nuevo, calidad_cliente: e.target.value })}>
+                  <option value="demandante">Nuestro cliente es: Demandante</option>
+                  <option value="demandado">Nuestro cliente es: Demandado</option>
+                </select>
+              )}
+
+              <div style={{ border: '1px solid #eef0f3', borderRadius: '10px', padding: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: '#1a1a2e' }}>Otras partes del proceso</p>
+                  <button
+                    type="button"
+                    style={{ ...styles.btnNuevo, padding: '6px 10px', fontSize: '12px' }}
+                    onClick={() => setOtrasPartes([...otrasPartes, { client_id: '', nombre: '', calidad: 'demandado' }])}
+                  >
+                    <Plus size={14} /> Agregar
+                  </button>
+                </div>
+                {otrasPartes.length === 0 && (
+                  <p style={{ margin: 0, fontSize: '12px', color: '#b2bec3' }}>Puedes añadir más demandantes o demandados.</p>
+                )}
+                {otrasPartes.map((p, idx) => (
+                  <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' }}>
+                    <select
+                      style={styles.input}
+                      value={p.client_id}
+                      onChange={e => {
+                        const next = [...otrasPartes]
+                        next[idx] = { ...next[idx], client_id: e.target.value, nombre: '' }
+                        setOtrasPartes(next)
+                      }}
+                    >
+                      <option value="">Cliente del directorio…</option>
+                      {clientes.filter(c => c.id !== nuevo.client_id).map(c => (
+                        <option key={c.id} value={c.id}>{c.nombre} {c.apellido}</option>
+                      ))}
+                    </select>
+                    {!p.client_id && (
+                      <input
+                        style={styles.input}
+                        placeholder="O nombre libre (contraparte)"
+                        value={p.nombre}
+                        onChange={e => {
+                          const next = [...otrasPartes]
+                          next[idx] = { ...next[idx], nombre: e.target.value }
+                          setOtrasPartes(next)
+                        }}
+                      />
+                    )}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <select
+                        style={{ ...styles.input, flex: 1 }}
+                        value={p.calidad}
+                        onChange={e => {
+                          const next = [...otrasPartes]
+                          next[idx] = { ...next[idx], calidad: e.target.value }
+                          setOtrasPartes(next)
+                        }}
+                      >
+                        <option value="demandante">Demandante</option>
+                        <option value="demandado">Demandado</option>
+                      </select>
+                      <button
+                        type="button"
+                        style={styles.closeBtn}
+                        onClick={() => setOtrasPartes(otrasPartes.filter((_, i) => i !== idx))}
+                        title="Quitar"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               <input style={styles.input} placeholder="Número de radicado" value={nuevo.numero_radicado} onChange={e => setNuevo({ ...nuevo, numero_radicado: e.target.value })} />
               <input style={styles.input} placeholder="Ciudad" value={nuevo.ciudad} onChange={e => setNuevo({ ...nuevo, ciudad: e.target.value })} />
               <select style={styles.input} value={nuevo.juzgado_id || ''} onChange={e => setNuevo({ ...nuevo, juzgado_id: e.target.value })}>

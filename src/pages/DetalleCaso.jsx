@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { ArrowLeft, FileText, MessageSquare, Plus, X, TrendingUp, CheckSquare, Pencil, Eye, Download, Trash2 } from 'lucide-react'
 import InformeCliente from './InformeCliente'
+import PartesCaso from '../components/PartesCaso'
 
 export default function DetalleCaso({ casoId, onBack, userProfile }) {
   const [caso, setCaso] = useState(null)
@@ -17,12 +18,20 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
   const [confirmarEliminar, setConfirmarEliminar] = useState(false)
   const [eliminando, setEliminando] = useState(false)
 
+  const [clientesLista, setClientesLista] = useState([])
+
   useEffect(() => { fetchCaso() }, [casoId])
+
+  useEffect(() => {
+    supabase.from('clients').select('id, nombre, apellido').order('nombre').then(({ data }) => {
+      setClientesLista(data || [])
+    })
+  }, [])
 
   const fetchCaso = async () => {
     let { data, error } = await supabase
       .from('cases')
-      .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion, calidad_procesal), juzgados(id, nombre, ciudad, especialidad)')
+      .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion), juzgados(id, nombre, ciudad, especialidad)')
       .eq('id', casoId)
       .single()
 
@@ -30,7 +39,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
       console.log('fetchCaso con juzgados:', error.message)
       const fallback = await supabase
         .from('cases')
-        .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion, calidad_procesal)')
+        .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion)')
         .eq('id', casoId)
         .single()
       data = fallback.data
@@ -63,8 +72,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
       telefono: caso.clients?.telefono || '',
       documento: caso.clients?.documento || '',
       ciudad: caso.clients?.ciudad || '',
-      direccion: caso.clients?.direccion || '',
-      calidad_procesal: caso.clients?.calidad_procesal || ''
+      direccion: caso.clients?.direccion || ''
     })
     setNuevoJuzgadoNombre('')
     setConfirmarEliminar(false)
@@ -99,11 +107,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
     if (caso.client_id || editCaso.client_id) {
       const clientId = editCaso.client_id || caso.client_id
       if (clientId && editCliente.nombre.trim()) {
-        const clienteUpdate = {
-          ...editCliente,
-          calidad_procesal: editCliente.calidad_procesal || null
-        }
-        await supabase.from('clients').update(clienteUpdate).eq('id', clientId)
+        await supabase.from('clients').update(editCliente).eq('id', clientId)
       }
     }
     setGuardando(false)
@@ -177,13 +181,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
             <span style={styles.metaLabel}>Cliente</span>
             <span style={styles.metaValue}>
               {caso.clients
-                ? `${caso.clients.nombre} ${caso.clients.apellido || ''}${
-                    caso.clients.calidad_procesal === 'demandante'
-                      ? ' (Demandante)'
-                      : caso.clients.calidad_procesal === 'demandado'
-                        ? ' (Demandado)'
-                        : ''
-                  }`
+                ? `${caso.clients.nombre} ${caso.clients.apellido || ''}`
                 : '—'}
             </span>
           </div>
@@ -201,6 +199,8 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
           </div>
         </div>
       </div>
+
+      <PartesCaso casoId={casoId} clientes={clientesLista} puedeEditar={true} />
 
       {modalEditar && (
         <div style={styles.overlay}>
@@ -220,7 +220,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
                   const clientId = e.target.value
                   setEditCaso({ ...editCaso, client_id: clientId })
                   if (!clientId) {
-                    setEditCliente({ nombre: '', apellido: '', correo: '', telefono: '', documento: '', ciudad: '', direccion: '', calidad_procesal: '' })
+                    setEditCliente({ nombre: '', apellido: '', correo: '', telefono: '', documento: '', ciudad: '', direccion: '' })
                     return
                   }
                   const { data } = await supabase.from('clients').select('*').eq('id', clientId).single()
@@ -232,8 +232,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
                       telefono: data.telefono || '',
                       documento: data.documento || '',
                       ciudad: data.ciudad || '',
-                      direccion: data.direccion || '',
-                      calidad_procesal: data.calidad_procesal || ''
+                      direccion: data.direccion || ''
                     })
                   }
                 }}
@@ -279,15 +278,6 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
               {(editCaso.client_id || caso.client_id) && (
                 <>
                   <p style={styles.sectionLabel}>Info del cliente</p>
-                  <select
-                    style={styles.input}
-                    value={editCliente.calidad_procesal || ''}
-                    onChange={e => setEditCliente({ ...editCliente, calidad_procesal: e.target.value })}
-                  >
-                    <option value="">Sin definir</option>
-                    <option value="demandante">Demandante</option>
-                    <option value="demandado">Demandado</option>
-                  </select>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <input style={styles.input} placeholder="Nombre" value={editCliente.nombre} onChange={e => setEditCliente({ ...editCliente, nombre: e.target.value })} />
                     <input style={styles.input} placeholder="Apellido" value={editCliente.apellido} onChange={e => setEditCliente({ ...editCliente, apellido: e.target.value })} />

@@ -546,11 +546,6 @@ function AdminClientes() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            {c.calidad_procesal && (
-              <span style={{ ...styles.badge, backgroundColor: '#6c5ce718', color: '#6c5ce7' }}>
-                {c.calidad_procesal}
-              </span>
-            )}
             <span style={{ ...styles.badge, backgroundColor: '#f0f2f5', color: '#636e72' }}>{c.tipo_persona || '—'}</span>
             <button style={styles.btnAcceso} onClick={() => crearAccesoCliente(c)}>
               Crear acceso
