@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { Search, Calendar, Plus, X, Pencil, Trash2 } from 'lucide-react'
 import { notificarAudiencia } from '../components/NotificacionesCampana'
+import { puedeEliminar, veTodoElDespacho } from '../lib/permisos'
 
 const ESTADOS = {
   programada: { label: 'Programada', color: '#0984e3' },
@@ -57,7 +58,7 @@ export default function Audiencias({ userProfile }) {
       .order('fecha_hora', { ascending: true })
 
     let rows = data || []
-    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+    if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
       rows = rows.filter(a => a.cases?.abogado_id === userProfile.id)
     }
     setAudiencias(rows)
@@ -69,7 +70,7 @@ export default function Audiencias({ userProfile }) {
       .from('cases')
       .select('id, titulo, numero_radicado, clients(nombre, apellido)')
       .order('titulo')
-    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+    if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
       query = query.eq('abogado_id', userProfile.id)
     }
     const { data } = await query
@@ -317,7 +318,7 @@ export default function Audiencias({ userProfile }) {
                 {guardando ? 'Guardando...' : 'Guardar'}
               </button>
 
-              {editando && (
+              {editando && puedeEliminar(userProfile?.rol) && (
                 eliminarId !== editando.id ? (
                   <button style={styles.btnEliminar} onClick={() => setEliminarId(editando.id)}>
                     <Trash2 size={14} /> Eliminar audiencia

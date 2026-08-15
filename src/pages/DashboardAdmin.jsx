@@ -3,8 +3,15 @@ import { supabase } from '../supabase'
 import logo from '../assets/LOGO_RUBY_RAMOS_SIMBOLO.svg'
 import {
   LayoutDashboard, Briefcase, Users, UserCheck,
-  LogOut, Menu, X, Plus, CheckCircle, Settings, AlertCircle
+  LogOut, Menu, X, Plus, CheckCircle, Settings, AlertCircle, FileText, Download,
+  Calendar, Landmark, Eye
 } from 'lucide-react'
+import Casos from './Casos'
+import Clientes from './Clientes'
+import Documentos from './Documentos'
+import Audiencias from './Audiencias'
+import Juzgados from './Juzgados'
+import NotificacionesCampana from '../components/NotificacionesCampana'
 
 const STAFF_ROLES = ['abogado', 'socio', 'asistente']
 const OPS_ROLES = [...STAFF_ROLES, 'cliente']
@@ -28,6 +35,7 @@ export default function DashboardAdmin({ session, userProfile }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [activePage, setActivePage] = useState(() => sessionStorage.getItem('sar_admin_page') || 'dashboard')
   const esSuperadmin = userProfile?.rol === 'superadmin'
+  const esAsistente = userProfile?.rol === 'asistente'
 
   useEffect(() => {
     sessionStorage.setItem('sar_admin_page', activePage)
@@ -35,9 +43,13 @@ export default function DashboardAdmin({ session, userProfile }) {
 
   const menuItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
-    { id: 'casos', label: 'Todos los Casos', icon: Briefcase },
+    { id: 'casos', label: 'Casos', icon: Briefcase },
+    { id: 'asignar', label: 'Asignar casos', icon: UserCheck },
     { id: 'abogados', label: 'Abogados', icon: UserCheck },
     { id: 'clientes', label: 'Clientes', icon: Users },
+    { id: 'juzgados', label: 'Juzgados', icon: Landmark },
+    { id: 'documentos', label: 'Documentos', icon: FileText },
+    { id: 'audiencias', label: 'Audiencias', icon: Calendar },
     ...(esSuperadmin ? [{ id: 'sistema', label: 'Sistema', icon: Settings }] : []),
   ]
 
@@ -47,14 +59,18 @@ export default function DashboardAdmin({ session, userProfile }) {
   const isHome = activePage === 'dashboard'
   const pageLabel = menuItems.find(m => m.id === activePage)?.label
   const pageSubtitles = {
-    casos: 'Vista global y asignación de abogados',
-    abogados: 'Equipo del despacho',
-    clientes: 'Directorio y accesos al portal',
+    casos: 'Expedientes y seguimiento',
+    asignar: 'Asignar abogados a cada caso',
+    abogados: 'Equipo del despacho y contratos SAR',
+    clientes: 'Directorio del despacho',
+    juzgados: 'Catálogo de despachos judiciales',
+    documentos: 'Archivos de los expedientes',
+    audiencias: 'Agenda de audiencias',
     sistema: 'Usuarios, roles y mantenimiento',
   }
-  const pageSubtitle = pageSubtitles[activePage] || 'Panel de administración'
+  const pageSubtitle = pageSubtitles[activePage] || 'Panel del despacho'
   const iniciales = `${userProfile?.nombre?.[0] || ''}${userProfile?.apellido?.[0] || ''}`.toUpperCase()
-  const rolLabel = esSuperadmin ? 'Superadmin' : 'Administración'
+  const rolLabel = esSuperadmin ? 'Superadmin' : esAsistente ? 'Asistente' : 'Administración'
 
   return (
     <div style={styles.container}>
@@ -142,6 +158,7 @@ export default function DashboardAdmin({ session, userProfile }) {
             )}
           </div>
           <div style={styles.userInfo}>
+            <NotificacionesCampana userProfile={userProfile} />
             <div>
               <p style={styles.userName}>{nombreUsuario}{userProfile?.apellido ? ` ${userProfile.apellido}` : ''}</p>
               <p style={styles.userEmail}>{session.user.email}</p>
@@ -153,9 +170,13 @@ export default function DashboardAdmin({ session, userProfile }) {
 
         <div style={styles.content}>
           {activePage === 'dashboard' && <AdminDashboard />}
-          {activePage === 'casos' && <AdminCasos />}
+          {activePage === 'casos' && <Casos session={session} userProfile={userProfile} />}
+          {activePage === 'asignar' && <AdminCasos />}
           {activePage === 'abogados' && <AdminAbogados esSuperadmin={esSuperadmin} />}
-          {activePage === 'clientes' && <AdminClientes />}
+          {activePage === 'clientes' && <Clientes session={session} userProfile={userProfile} />}
+          {activePage === 'juzgados' && <Juzgados userProfile={userProfile} />}
+          {activePage === 'documentos' && <Documentos userProfile={userProfile} />}
+          {activePage === 'audiencias' && <Audiencias userProfile={userProfile} />}
           {activePage === 'sistema' && esSuperadmin && <AdminSistema />}
         </div>
       </div>
@@ -313,7 +334,7 @@ function AdminCasos() {
       <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
         <input
           style={{ ...styles.input, flex: 1, minWidth: '220px' }}
-          placeholder="Buscar por caso, cliente, cédula, teléfono o abogado..."
+          placeholder="Buscar por caso, radicado, cédula, cliente o abogado..."
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
         />
@@ -384,6 +405,10 @@ function AdminAbogados({ esSuperadmin }) {
   const [abogados, setAbogados] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
   const [nuevo, setNuevo] = useState({ nombre: '', apellido: '', email: '', telefono: '', rol: 'abogado' })
+  const [contratoFile, setContratoFile] = useState(null)
+  const [creando, setCreando] = useState(false)
+  const [subiendoId, setSubiendoId] = useState(null)
+  const [vistaContrato, setVistaContrato] = useState(null)
 
   useEffect(() => { fetchAbogados() }, [])
 
@@ -393,12 +418,82 @@ function AdminAbogados({ esSuperadmin }) {
     setAbogados(data || [])
   }
 
+  const obtenerContratoUrl = async (abogado) => {
+    if (!abogado?.contrato_url) return null
+    const { data, error } = await supabase.storage.from('contratos').download(abogado.contrato_url)
+    if (error || !data) {
+      alert('No se pudo abrir el contrato: ' + (error?.message || 'archivo no encontrado'))
+      return null
+    }
+    return URL.createObjectURL(data)
+  }
+
+  const esPdfNombre = (nombre = '') => /\.pdf$/i.test(nombre)
+  const esImagenNombre = (nombre = '') => /\.(jpe?g|png|gif|webp)$/i.test(nombre)
+
+  const subirContrato = async (userId, file) => {
+    if (!userId || !file) return null
+    const safeName = file.name.replace(/[^\w.\-áéíóúñÁÉÍÓÚÑ ]+/g, '_')
+    const path = `${userId}/${Date.now()}_${safeName}`
+    const { error: uploadError } = await supabase.storage.from('contratos').upload(path, file, { upsert: true })
+    if (uploadError) throw uploadError
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ contrato_url: path, contrato_nombre: file.name })
+      .eq('id', userId)
+    if (updateError) throw updateError
+    return path
+  }
+
+  const verContrato = async (abogado) => {
+    if (vistaContrato?.url) URL.revokeObjectURL(vistaContrato.url)
+    const url = await obtenerContratoUrl(abogado)
+    if (!url) return
+    setVistaContrato({
+      url,
+      nombre: abogado.contrato_nombre || 'Contrato SAR',
+      abogado: `${abogado.nombre || ''} ${abogado.apellido || ''}`.trim(),
+    })
+  }
+
+  const cerrarVistaContrato = () => {
+    if (vistaContrato?.url) URL.revokeObjectURL(vistaContrato.url)
+    setVistaContrato(null)
+  }
+
+  const descargarContrato = async (abogado) => {
+    const url = await obtenerContratoUrl(abogado)
+    if (!url) return
+    const a = document.createElement('a')
+    a.href = url
+    a.download = abogado.contrato_nombre || 'contrato-sar.pdf'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const reemplazarContrato = async (abogado, file) => {
+    if (!file) return
+    setSubiendoId(abogado.id)
+    try {
+      if (abogado.contrato_url) {
+        await supabase.storage.from('contratos').remove([abogado.contrato_url])
+      }
+      await subirContrato(abogado.id, file)
+      fetchAbogados()
+    } catch (e) {
+      alert('Error al subir contrato: ' + e.message)
+    } finally {
+      setSubiendoId(null)
+    }
+  }
+
   const crearAbogado = async () => {
     if (!nuevo.nombre || !nuevo.email) return
     if (nuevo.rol === 'admin' && !esSuperadmin) {
       alert('Solo el superadmin puede crear administradores.')
       return
     }
+    setCreando(true)
     try {
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
@@ -419,13 +514,30 @@ function AdminAbogados({ esSuperadmin }) {
         else alert('Error: ' + msg)
         return
       }
+
+      if (contratoFile && data.profile_id) {
+        try {
+          await subirContrato(data.profile_id, contratoFile)
+        } catch (e) {
+          alert('Usuario creado, pero falló el contrato: ' + e.message)
+        }
+      }
+
       alert('Usuario creado. Contraseña inicial: Temporal123!')
       setModalOpen(false)
       setNuevo({ nombre: '', apellido: '', email: '', telefono: '', rol: 'abogado' })
+      setContratoFile(null)
       fetchAbogados()
     } catch (e) {
       alert('Error de conexión: ' + e.message)
+    } finally {
+      setCreando(false)
     }
+  }
+
+  const cerrarModal = () => {
+    setModalOpen(false)
+    setContratoFile(null)
   }
 
   return (
@@ -443,19 +555,82 @@ function AdminAbogados({ esSuperadmin }) {
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a2e', margin: 0 }}>{a.nombre} {a.apellido}</p>
             <p style={{ fontSize: '13px', color: '#b2bec3', margin: '4px 0 0' }}>{a.email}</p>
+            {a.contrato_url ? (
+              <p style={{ fontSize: '12px', color: '#00b894', margin: '4px 0 0' }}>
+                Contrato: {a.contrato_nombre || 'Adjunto'}
+              </p>
+            ) : (
+              <p style={{ fontSize: '12px', color: '#d63031', margin: '4px 0 0' }}>Sin contrato SAR</p>
+            )}
           </div>
-          <span style={{ ...styles.badge, backgroundColor: (rolColor[a.rol] || '#636e72') + '20', color: rolColor[a.rol] || '#636e72' }}>
-            {a.rol}
-          </span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {a.contrato_url && (
+              <>
+                <button style={styles.btnAcceso} onClick={() => verContrato(a)} title="Ver contrato">
+                  <Eye size={14} /> Ver
+                </button>
+                <button style={styles.btnAcceso} onClick={() => descargarContrato(a)} title="Descargar contrato">
+                  <Download size={14} />
+                </button>
+              </>
+            )}
+            <label style={{ ...styles.btnAcceso, cursor: subiendoId === a.id ? 'wait' : 'pointer', opacity: subiendoId === a.id ? 0.6 : 1 }}>
+              <FileText size={14} /> {a.contrato_url ? 'Reemplazar' : 'Subir contrato'}
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,image/jpeg,image/png"
+                style={{ display: 'none' }}
+                disabled={subiendoId === a.id}
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  if (file) reemplazarContrato(a, file)
+                }}
+              />
+            </label>
+            <span style={{ ...styles.badge, backgroundColor: (rolColor[a.rol] || '#636e72') + '20', color: rolColor[a.rol] || '#636e72' }}>
+              {a.rol}
+            </span>
+          </div>
         </div>
       ))}
+
+      {vistaContrato && (
+        <div style={styles.overlay} onClick={cerrarVistaContrato}>
+          <div style={{ ...styles.modal, maxWidth: '900px', width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div>
+                <h3 style={{ margin: 0 }}>{vistaContrato.nombre}</h3>
+                {vistaContrato.abogado && (
+                  <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#636e72' }}>{vistaContrato.abogado}</p>
+                )}
+              </div>
+              <button style={styles.closeBtn} onClick={cerrarVistaContrato}><X size={20} /></button>
+            </div>
+            {esImagenNombre(vistaContrato.nombre) ? (
+              <img src={vistaContrato.url} alt={vistaContrato.nombre} style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', background: '#f8f9fa', borderRadius: '8px' }} />
+            ) : esPdfNombre(vistaContrato.nombre) ? (
+              <iframe src={vistaContrato.url} title={vistaContrato.nombre} style={{ width: '100%', height: '70vh', border: 'none', borderRadius: '8px', background: '#f8f9fa' }} />
+            ) : (
+              <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+                <p style={{ color: '#636e72', marginBottom: '12px' }}>
+                  Vista previa no disponible para este tipo de archivo (Word). Puedes descargarlo.
+                </p>
+                <a href={vistaContrato.url} download={vistaContrato.nombre} style={{ ...styles.btnAcceso, display: 'inline-flex', textDecoration: 'none' }}>
+                  <Download size={14} /> Descargar
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {modalOpen && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
             <div style={styles.modalHeader}>
               <h3 style={{ margin: 0 }}>Nuevo usuario del equipo</h3>
-              <button style={styles.closeBtn} onClick={() => setModalOpen(false)}><X size={20} /></button>
+              <button style={styles.closeBtn} onClick={cerrarModal}><X size={20} /></button>
             </div>
             <div style={styles.form}>
               <div style={{ display: 'flex', gap: '12px' }}>
@@ -470,10 +645,39 @@ function AdminAbogados({ esSuperadmin }) {
                 <option value="asistente">Asistente</option>
                 {esSuperadmin && <option value="admin">Admin (despacho)</option>}
               </select>
+
+              {(nuevo.rol === 'abogado' || nuevo.rol === 'socio') && (
+                <div style={{
+                  border: '1px dashed #dfe6e9',
+                  borderRadius: '10px',
+                  padding: '14px',
+                  background: '#f8f9fa',
+                }}>
+                  <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 600, color: '#1a1a2e' }}>
+                    Contrato con SAR Abogados
+                  </p>
+                  <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#636e72' }}>
+                    PDF, Word o imagen (máx. 10 MB). Opcional al crear; puedes subirlo después.
+                  </p>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,image/jpeg,image/png"
+                    onChange={e => setContratoFile(e.target.files?.[0] || null)}
+                  />
+                  {contratoFile && (
+                    <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#00b894' }}>
+                      Archivo: {contratoFile.name}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <p style={{ fontSize: '12px', color: '#b2bec3', margin: 0 }}>
                 Contraseña inicial: <strong>Temporal123!</strong>
               </p>
-              <button style={styles.btnGuardar} onClick={crearAbogado}>Crear</button>
+              <button style={{ ...styles.btnGuardar, opacity: creando ? 0.7 : 1 }} onClick={crearAbogado} disabled={creando}>
+                {creando ? 'Creando...' : 'Crear'}
+              </button>
             </div>
           </div>
         </div>
@@ -523,16 +727,22 @@ function AdminClientes() {
     }
   }
 
-  const clientesFiltrados = clientes.filter(c =>
-    `${c.nombre} ${c.apellido || ''}`.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.correo?.toLowerCase().includes(busqueda.toLowerCase())
-  )
+  const q = busqueda.trim().toLowerCase()
+  const clientesFiltrados = clientes.filter(c => {
+    if (!q) return true
+    return (
+      `${c.nombre} ${c.apellido || ''}`.toLowerCase().includes(q) ||
+      c.correo?.toLowerCase().includes(q) ||
+      c.documento?.toLowerCase().includes(q) ||
+      c.telefono?.toLowerCase().includes(q)
+    )
+  })
 
   return (
     <div style={styles.card}>
       <input
         style={{ ...styles.input, marginBottom: '20px' }}
-        placeholder="Buscar cliente..."
+        placeholder="Buscar por nombre, cédula/NIT o correo..."
         value={busqueda}
         onChange={e => setBusqueda(e.target.value)}
       />
@@ -542,7 +752,7 @@ function AdminClientes() {
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a2e', margin: 0 }}>{c.nombre} {c.apellido}</p>
             <p style={{ fontSize: '13px', color: '#b2bec3', margin: '4px 0 0' }}>
-              {c.correo || 'Sin correo'}{c.telefono ? ` · ${c.telefono}` : ''}
+              {c.documento ? `Doc: ${c.documento} · ` : ''}{c.correo || 'Sin correo'}{c.telefono ? ` · ${c.telefono}` : ''}
             </p>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>

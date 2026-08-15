@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { Search, FileText, Download, Eye, X, Trash2, Image, File } from 'lucide-react'
+import { puedeEliminar, veTodoElDespacho } from '../lib/permisos'
 
 export default function Documentos({ userProfile }) {
   const [documentos, setDocumentos] = useState([])
@@ -27,7 +28,7 @@ export default function Documentos({ userProfile }) {
       .order('creado_en', { ascending: false })
 
     let docs = data || []
-    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+    if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
       docs = docs.filter(d => d.cases?.abogado_id === userProfile.id)
     }
     setDocumentos(docs)
@@ -36,7 +37,7 @@ export default function Documentos({ userProfile }) {
 
   const fetchCasos = async () => {
     let query = supabase.from('cases').select('id, titulo')
-    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+    if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
       query = query.eq('abogado_id', userProfile.id)
     }
     const { data } = await query
@@ -172,9 +173,11 @@ export default function Documentos({ userProfile }) {
                 <button style={styles.btnDescargar} onClick={() => descargarArchivo(doc)} title="Descargar">
                   <Download size={14} />
                 </button>
-                <button style={styles.btnEliminar} onClick={() => setDocEliminar(doc)} title="Eliminar">
-                  <Trash2 size={14} />
-                </button>
+                {puedeEliminar(userProfile?.rol) && (
+                  <button style={styles.btnEliminar} onClick={() => setDocEliminar(doc)} title="Eliminar">
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </div>
             </div>
           ))}

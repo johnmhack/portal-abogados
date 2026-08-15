@@ -13,6 +13,7 @@ import {
   CheckCircle, AlertCircle, Landmark
 } from 'lucide-react'
 import NotificacionesCampana from '../components/NotificacionesCampana'
+import { veTodoElDespacho } from '../lib/permisos'
 
 export default function Dashboard({ session, userProfile }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -47,7 +48,7 @@ useEffect(() => {
 
 const fetchStats = async () => {
   let query = supabase.from('cases').select('status')
-  if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+  if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
     query = query.eq('abogado_id', userProfile.id)
   }
   const { data } = await query
@@ -62,7 +63,7 @@ const fetchStats = async () => {
 
 const fetchCasosRecientes = async () => {
   let query = supabase.from('cases').select('*, clients(nombre, apellido)').order('creado_en', { ascending: false }).limit(5)
-  if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+  if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
     query = query.eq('abogado_id', userProfile.id)
   }
   const { data } = await query
@@ -297,7 +298,7 @@ const fetchCasosRecientes = async () => {
             />
           )}
           {activePage === 'clientes' && <Clientes session={session} userProfile={userProfile} />}
-          {activePage === 'juzgados' && <Juzgados />}
+          {activePage === 'juzgados' && <Juzgados userProfile={userProfile} />}
           {activePage === 'documentos' && <Documentos userProfile={userProfile} />}
           {activePage === 'audiencias' && <Audiencias userProfile={userProfile} />}
           {activePage === 'mensajes' && <Mensajes session={session} />}

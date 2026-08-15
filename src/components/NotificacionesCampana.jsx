@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
 import { Bell } from 'lucide-react'
+import { veTodoElDespacho } from '../lib/permisos'
 
 const DIAS_PROXIMAS = 3
 const HORAS_PROXIMAS = DIAS_PROXIMAS * 24
@@ -211,7 +212,7 @@ async function cargarProximasAudiencias(userProfile) {
   if (userProfile.rol === 'cliente') {
     // RLS ya filtra; reforzamos por client_id del perfil
     rows = rows.filter(a => a.cases?.client_id === userProfile.client_id)
-  } else if (!['admin', 'superadmin'].includes(userProfile.rol)) {
+  } else if (!veTodoElDespacho(userProfile.rol)) {
     rows = rows.filter(a => a.cases?.abogado_id === userProfile.id)
   }
 

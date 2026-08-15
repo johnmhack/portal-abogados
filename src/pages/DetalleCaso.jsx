@@ -3,6 +3,7 @@ import { supabase } from '../supabase'
 import { ArrowLeft, FileText, MessageSquare, Plus, X, TrendingUp, CheckSquare, Pencil, Eye, Download, Trash2 } from 'lucide-react'
 import InformeCliente from './InformeCliente'
 import PartesCaso from '../components/PartesCaso'
+import { puedeEliminar } from '../lib/permisos'
 
 export default function DetalleCaso({ casoId, onBack, userProfile }) {
   const [caso, setCaso] = useState(null)
@@ -134,6 +135,8 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
     setConfirmarEliminar(false)
   }
 
+  const puedeBorrar = puedeEliminar(userProfile?.rol)
+
   const statusColor = {
     activo: '#0984e3', en_proceso: '#c9a84c', audiencia: '#6c5ce7',
     cerrado: '#636e72', ganado: '#00b894', perdido: '#d63031'
@@ -200,7 +203,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
         </div>
       </div>
 
-      <PartesCaso casoId={casoId} clientes={clientesLista} puedeEditar={true} />
+      <PartesCaso casoId={casoId} clientes={clientesLista} puedeEditar={true} puedeBorrar={puedeBorrar} />
 
       {modalEditar && (
         <div style={styles.overlay}>
@@ -294,7 +297,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
                 {guardando ? 'Guardando...' : 'Guardar cambios'}
               </button>
 
-              {!confirmarEliminar ? (
+              {puedeBorrar && (!confirmarEliminar ? (
                 <button style={styles.btnEliminar} onClick={() => setConfirmarEliminar(true)}>
                   Eliminar caso
                 </button>
@@ -312,7 +315,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
                     </button>
                   </div>
                 </div>
-              )}
+              ))}
             </div>
           </div>
         </div>
@@ -346,9 +349,9 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
 
       {/* CONTENIDO */}
       {tab === 'eventos' && <EventosTab casoId={casoId} />}
-      {tab === 'etapas' && <EtapasTab casoId={casoId} />}
-      {tab === 'tareas' && <TareasTab casoId={casoId} />}
-      {tab === 'documentos' && <DocumentosTab casoId={casoId} />}
+      {tab === 'etapas' && <EtapasTab casoId={casoId} puedeBorrar={puedeBorrar} />}
+      {tab === 'tareas' && <TareasTab casoId={casoId} puedeBorrar={puedeBorrar} />}
+      {tab === 'documentos' && <DocumentosTab casoId={casoId} puedeBorrar={puedeBorrar} />}
     </div>
   )
 }
@@ -406,7 +409,7 @@ function EventosTab({ casoId }) {
 }
 
 // ── ETAPAS ──
-function EtapasTab({ casoId }) {
+function EtapasTab({ casoId, puedeBorrar = true }) {
   const [etapas, setEtapas] = useState([])
   const [docsPorEtapa, setDocsPorEtapa] = useState({})
   const [tareasPorEtapa, setTareasPorEtapa] = useState({})
@@ -641,9 +644,11 @@ function EtapasTab({ casoId }) {
                         <button style={styles.btnVer} onClick={() => visualizarDocEtapa(doc)} title="Ver">
                           <Eye size={14} /> Ver
                         </button>
-                        <button style={styles.btnTareaEliminar} onClick={() => eliminarDocEtapa(doc)} title="Eliminar">
-                          <X size={14} />
-                        </button>
+                        {puedeBorrar && (
+                          <button style={styles.btnTareaEliminar} onClick={() => eliminarDocEtapa(doc)} title="Eliminar">
+                            <X size={14} />
+                          </button>
+                        )}
                       </div>
                     ))}
 
@@ -690,9 +695,11 @@ function EtapasTab({ casoId }) {
                           textDecoration: t.completado ? 'line-through' : 'none',
                           flex: 1
                         }}>{t.titulo}</span>
+                        {puedeBorrar && (
                         <button style={styles.btnTareaEliminar} onClick={() => eliminarTareaEtapa(t.id)}>
                           <X size={14} />
                         </button>
+                        )}
                       </div>
                     ))}
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -735,7 +742,7 @@ function EtapasTab({ casoId }) {
 }
 
 // ── TAREAS ──
-function TareasTab({ casoId }) {
+function TareasTab({ casoId, puedeBorrar = true }) {
   const [tareas, setTareas] = useState([])
   const [nueva, setNueva] = useState('')
 
@@ -786,9 +793,11 @@ function TareasTab({ casoId }) {
               )}
             </div>
             {t.fecha_completado && <span style={{ fontSize: '12px', color: '#b2bec3' }}>{new Date(t.fecha_completado).toLocaleDateString('es-CO')}</span>}
-            <button style={styles.btnTareaEliminar} onClick={() => eliminarTarea(t.id)} title="Eliminar tarea">
-              <X size={16} />
-            </button>
+            {puedeBorrar && (
+              <button style={styles.btnTareaEliminar} onClick={() => eliminarTarea(t.id)} title="Eliminar tarea">
+                <X size={16} />
+              </button>
+            )}
           </div>
         ))
       )}
@@ -797,7 +806,7 @@ function TareasTab({ casoId }) {
 }
 
 // ── DOCUMENTOS ──
-function DocumentosTab({ casoId }) {
+function DocumentosTab({ casoId, puedeBorrar = true }) {
   const [documentos, setDocumentos] = useState([])
   const [subiendo, setSubiendo] = useState(false)
   const [vista, setVista] = useState(null)
@@ -886,7 +895,9 @@ function DocumentosTab({ casoId }) {
             <div style={{ display: 'flex', gap: '8px' }}>
               <button style={styles.btnVer} onClick={() => visualizar(doc)}><Eye size={14} /> Ver</button>
               <button style={styles.btnDescargar} onClick={() => descargar(doc)}><Download size={14} /> Descargar</button>
+              {puedeBorrar && (
               <button style={styles.btnDocEliminar} onClick={() => setDocEliminar(doc)}><Trash2 size={14} /></button>
+              )}
             </div>
           </div>
         ))

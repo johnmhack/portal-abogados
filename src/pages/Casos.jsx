@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { Plus, Search, Briefcase, X } from 'lucide-react'
 import DetalleCaso from './DetalleCaso'
+import { veTodoElDespacho } from '../lib/permisos'
 
 export default function Casos({ session, userProfile, casoInicialId = null, onLimpiarCasoInicial }) {
   const [casos, setCasos] = useState([])
@@ -38,10 +39,10 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
   const fetchCasos = async () => {
     let query = supabase
       .from('cases')
-      .select('*, clients(nombre, apellido), juzgados(nombre, ciudad)')
+      .select('*, clients(nombre, apellido, documento), juzgados(nombre, ciudad)')
       .order('creado_en', { ascending: false })
 
-    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+    if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
       query = query.eq('abogado_id', userProfile.id)
     }
 
@@ -51,9 +52,9 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
       console.log('fetchCasos con juzgados:', error.message)
       let fallback = supabase
         .from('cases')
-        .select('*, clients(nombre, apellido)')
+        .select('*, clients(nombre, apellido, documento)')
         .order('creado_en', { ascending: false })
-      if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+      if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
         fallback = fallback.eq('abogado_id', userProfile.id)
       }
       const res = await fallback
@@ -74,7 +75,7 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
 
   const fetchClientes = async () => {
     let query = supabase.from('clients').select('id, nombre, apellido')
-    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+    if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
       query = query.eq('abogado_id', userProfile.id)
     }
     const { data } = await query
@@ -196,10 +197,17 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
 
 }
 
-  const casosFiltrados = casos.filter(c =>
-    c.titulo.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.clients?.nombre?.toLowerCase().includes(busqueda.toLowerCase())
-  )
+  const q = busqueda.trim().toLowerCase()
+  const casosFiltrados = casos.filter(c => {
+    if (!q) return true
+    const cliente = `${c.clients?.nombre || ''} ${c.clients?.apellido || ''}`.toLowerCase()
+    return (
+      c.titulo?.toLowerCase().includes(q) ||
+      c.numero_radicado?.toLowerCase().includes(q) ||
+      c.clients?.documento?.toLowerCase().includes(q) ||
+      cliente.includes(q)
+    )
+  })
 
   const statusColor = {
     activo: '#0984e3',
@@ -219,7 +227,7 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
           <Search size={18} color="#8b949e" />
           <input
             style={styles.searchInput}
-            placeholder="Buscar caso o cliente..."
+            placeholder="Buscar por caso, radicado o cédula..."
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
           />

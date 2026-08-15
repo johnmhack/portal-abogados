@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { Plus, Search, Users, X, Phone, Mail, Pencil } from 'lucide-react'
+import { puedeEliminar, veTodoElDespacho } from '../lib/permisos'
 
 export default function Clientes({ userProfile }) {
   const [clientes, setClientes] = useState([])
@@ -21,7 +22,7 @@ export default function Clientes({ userProfile }) {
 
   const fetchClientes = async () => {
     let query = supabase.from('clients').select('*').order('creado_en', { ascending: false })
-    if (userProfile?.id && !['admin', 'superadmin'].includes(userProfile?.rol)) {
+    if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
       query = query.eq('abogado_id', userProfile.id)
     }
     const { data } = await query
@@ -89,11 +90,16 @@ export default function Clientes({ userProfile }) {
   fetchClientes()
 }
 
-const clientesFiltrados = clientes.filter(c =>
-  `${c.nombre} ${c.apellido}`.toLowerCase().includes(busqueda.toLowerCase()) ||
-  c.correo?.toLowerCase().includes(busqueda.toLowerCase()) ||
-  c.documento?.toLowerCase().includes(busqueda.toLowerCase())
+const q = busqueda.trim().toLowerCase()
+const clientesFiltrados = clientes.filter(c => {
+  if (!q) return true
+  return (
+    `${c.nombre} ${c.apellido || ''}`.toLowerCase().includes(q) ||
+    c.correo?.toLowerCase().includes(q) ||
+    c.documento?.toLowerCase().includes(q) ||
+    c.telefono?.toLowerCase().includes(q)
   )
+})
   
 const editarCliente = async () => {
   if (!clienteEditar.nombre) return
@@ -146,7 +152,7 @@ const editarCliente = async () => {
           <Search size={18} color="#8b949e" />
           <input
             style={styles.searchInput}
-            placeholder="Buscar cliente..."
+            placeholder="Buscar por nombre, cédula/NIT o correo..."
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
           />
@@ -274,7 +280,7 @@ const editarCliente = async () => {
               <input style={styles.input} placeholder="Dirección" value={clienteEditar.direccion || ''} onChange={e => setClienteEditar({ ...clienteEditar, direccion: e.target.value })} />
               <button style={styles.btnGuardar} onClick={editarCliente}>Guardar Cambios</button>
 
-              {!confirmarEliminar ? (
+              {puedeEliminar(userProfile?.rol) && (!confirmarEliminar ? (
                 <button style={styles.btnEliminar} onClick={() => setConfirmarEliminar(true)}>
                   Eliminar cliente
                 </button>
@@ -292,7 +298,7 @@ const editarCliente = async () => {
                     </button>
                   </div>
                 </div>
-              )}
+              ))}
             </div>
           </div>
         </div>

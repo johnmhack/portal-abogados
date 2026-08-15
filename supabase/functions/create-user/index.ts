@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { nombre, apellido, email, telefono, rol, client_id } = await req.json()
+    const { nombre, apellido, email, telefono, rol, client_id, password } = await req.json()
 
     if (!nombre || !email) {
       throw new Error('nombre y email son obligatorios')
@@ -29,17 +29,19 @@ Deno.serve(async (req) => {
       throw new Error('Rol no permitido: ' + rolFinal)
     }
 
+    const pass = password || 'Temporal123!'
+
     // Crear usuario en Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
-      password: 'Temporal123!',
+      password: pass,
       email_confirm: true
     })
 
     if (authError) throw authError
 
     // Crear perfil en tabla users
-    const { error: profileError } = await supabaseAdmin
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('users')
       .insert([{
         auth_id: authData.user.id,
@@ -50,11 +52,17 @@ Deno.serve(async (req) => {
         rol: rolFinal,
         client_id: client_id || null
       }])
+      .select('id')
+      .single()
 
     if (profileError) throw profileError
 
     return new Response(
-      JSON.stringify({ success: true, user: authData.user }),
+      JSON.stringify({
+        success: true,
+        user: authData.user,
+        profile_id: profile?.id || null,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 

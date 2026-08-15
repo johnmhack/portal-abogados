@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { Plus, Search, Landmark, X, Pencil } from 'lucide-react'
+import { puedeEliminar } from '../lib/permisos'
 
 const formVacio = { nombre: '', ciudad: '', especialidad: '', direccion: '', telefono: '', correo: '' }
 
-export default function Juzgados() {
+export default function Juzgados({ userProfile }) {
   const [juzgados, setJuzgados] = useState([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
@@ -148,7 +149,7 @@ export default function Juzgados() {
               <button style={styles.btnGuardar} onClick={guardar} disabled={guardando}>
                 {guardando ? 'Guardando...' : 'Guardar'}
               </button>
-              {editando && (
+              {editando && puedeEliminar(userProfile?.rol) && (
                 !confirmarEliminar ? (
                   <button style={styles.btnEliminar} onClick={() => setConfirmarEliminar(true)}>Eliminar juzgado</button>
                 ) : (

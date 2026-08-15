@@ -74,7 +74,8 @@ function App() {
   )
 
   if (userProfile.rol === 'cliente') return <DashboardCliente session={session} userProfile={userProfile} />
-  if (['admin', 'superadmin'].includes(userProfile.rol)) {
+  // Despacho SAR: dueña, asistente y superadmin comparten panel de gestión
+  if (['admin', 'superadmin', 'asistente'].includes(userProfile.rol)) {
     return <DashboardAdmin session={session} userProfile={userProfile} />
   }
 

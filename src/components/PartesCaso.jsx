@@ -7,7 +7,7 @@ const calidadColor = {
   demandado: '#e17055',
 }
 
-export default function PartesCaso({ casoId, clientes = [], puedeEditar = true }) {
+export default function PartesCaso({ casoId, clientes = [], puedeEditar = true, puedeBorrar = true }) {
   const [partes, setPartes] = useState([])
   const [loading, setLoading] = useState(true)
   const [nueva, setNueva] = useState({ client_id: '', nombre: '', calidad: 'demandado' })
@@ -93,7 +93,9 @@ export default function PartesCaso({ casoId, clientes = [], puedeEditar = true }
                     <option value="demandante">Demandante</option>
                     <option value="demandado">Demandado</option>
                   </select>
-                  <button style={styles.btnDel} onClick={() => eliminar(p.id)} title="Quitar"><Trash2 size={14} /></button>
+                  {puedeBorrar && (
+                    <button style={styles.btnDel} onClick={() => eliminar(p.id)} title="Quitar"><Trash2 size={14} /></button>
+                  )}
                 </div>
               )}
             </div>
@@ -119,7 +121,9 @@ export default function PartesCaso({ casoId, clientes = [], puedeEditar = true }
                     <option value="demandante">Demandante</option>
                     <option value="demandado">Demandado</option>
                   </select>
-                  <button style={styles.btnDel} onClick={() => eliminar(p.id)} title="Quitar"><Trash2 size={14} /></button>
+                  {puedeBorrar && (
+                    <button style={styles.btnDel} onClick={() => eliminar(p.id)} title="Quitar"><Trash2 size={14} /></button>
+                  )}
                 </div>
               )}
             </div>
