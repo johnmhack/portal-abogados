@@ -16,18 +16,34 @@ dist-ssr
 .env
 .env.*
 !.env.example
+*.pem
+*.p12
+*.key
+credentials.json
+service-account*.json
+**/secrets/**
+.secrets
 
-# Supabase CLI local
+# Supabase CLI local / tokens
 supabase/.temp
 supabase/.branches
+supabase/.env
+supabase/.env.*
 
-# Editor directories and files
+# OS / Editor
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
+Desktop.ini
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Caches / coverage
+.cache
+coverage
+*.tsbuildinfo

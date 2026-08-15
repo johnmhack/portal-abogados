@@ -73,6 +73,32 @@ function App() {
     </div>
   )
 
+  if (userProfile.activo === false) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f6fa', gap: '16px', padding: '24px',
+      }}>
+        <p style={{ color: '#d63031', fontSize: '16px', fontWeight: 600, textAlign: 'center', margin: 0 }}>
+          Tu acceso al portal está desactivado.
+        </p>
+        <p style={{ color: '#636e72', fontSize: '14px', textAlign: 'center', margin: 0, maxWidth: '360px' }}>
+          Contacta al despacho SAR si crees que es un error.
+        </p>
+        <button
+          onClick={() => supabase.auth.signOut()}
+          style={{
+            marginTop: '8px', backgroundColor: '#1a1a2e', color: '#c9a84c',
+            border: 'none', padding: '12px 20px', borderRadius: '10px',
+            cursor: 'pointer', fontWeight: 600,
+          }}
+        >
+          Cerrar sesión
+        </button>
+      </div>
+    )
+  }
+
   if (userProfile.rol === 'cliente') return <DashboardCliente session={session} userProfile={userProfile} />
   // Despacho SAR: dueña, asistente y superadmin comparten panel de gestión
   if (['admin', 'superadmin', 'asistente'].includes(userProfile.rol)) {

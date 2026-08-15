@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { Plus, Search, Users, X, Phone, Mail, Pencil } from 'lucide-react'
-import { puedeEliminar, veTodoElDespacho } from '../lib/permisos'
+import { puedeEliminar, veTodoElDespacho, puedeGestionarClientes, veContactoCliente } from '../lib/permisos'
 
 export default function Clientes({ userProfile }) {
   const [clientes, setClientes] = useState([])
@@ -18,10 +18,16 @@ export default function Clientes({ userProfile }) {
     ciudad: '', tipo_persona: 'natural'
   })
 
+  const puedeGestionar = puedeGestionarClientes(userProfile?.rol)
+  const veContacto = veContactoCliente(userProfile?.rol)
+
   useEffect(() => { fetchClientes() }, [])
 
   const fetchClientes = async () => {
-    let query = supabase.from('clients').select('*').order('creado_en', { ascending: false })
+    const cols = veContactoCliente(userProfile?.rol)
+      ? '*'
+      : 'id, nombre, apellido, documento, ciudad, tipo_persona, abogado_id, creado_en'
+    let query = supabase.from('clients').select(cols).order('creado_en', { ascending: false })
     if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
       query = query.eq('abogado_id', userProfile.id)
     }
@@ -30,14 +36,91 @@ export default function Clientes({ userProfile }) {
     setLoading(false)
   }
 
+  const normalizarDoc = (d) => (d || '').replace(/[\s.\-]/g, '').toLowerCase()
+  const normalizarTexto = (t) => (t || '').trim().toLowerCase().replace(/\s+/g, ' ')
+
+  const buscarDuplicado = async ({ documento, correo, nombre, apellido, excluirId = null }) => {
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id, nombre, apellido, documento, correo')
+      .order('nombre')
+    if (error || !data) return null
+
+    const docNorm = normalizarDoc(documento)
+    const correoNorm = normalizarTexto(correo)
+    const nombreNorm = normalizarTexto(`${nombre || ''} ${apellido || ''}`)
+
+    const lista = excluirId ? data.filter(c => c.id !== excluirId) : data
+
+    if (docNorm) {
+      const porDoc = lista.find(c => normalizarDoc(c.documento) === docNorm)
+      if (porDoc) {
+        return {
+          tipo: 'documento',
+          cliente: porDoc,
+          mensaje: `Ya existe un cliente con ese documento (${porDoc.documento || docNorm}):\n${porDoc.nombre} ${porDoc.apellido || ''}${porDoc.correo ? `\nCorreo: ${porDoc.correo}` : ''}\n\nNo se creó un duplicado. Usa el cliente que ya está en el directorio.`,
+        }
+      }
+    }
+
+    if (correoNorm) {
+      const porCorreo = lista.find(c => normalizarTexto(c.correo) === correoNorm)
+      if (porCorreo) {
+        return {
+          tipo: 'correo',
+          cliente: porCorreo,
+          mensaje: `Ya existe un cliente con ese correo (${porCorreo.correo}):\n${porCorreo.nombre} ${porCorreo.apellido || ''}${porCorreo.documento ? `\nDoc: ${porCorreo.documento}` : ''}\n\nNo se creó un duplicado.`,
+        }
+      }
+    }
+
+    if (nombreNorm.length >= 3) {
+      const porNombre = lista.find(c => normalizarTexto(`${c.nombre || ''} ${c.apellido || ''}`) === nombreNorm)
+      if (porNombre) {
+        return {
+          tipo: 'nombre',
+          cliente: porNombre,
+          mensaje: `Parece que ya existe alguien con el mismo nombre:\n${porNombre.nombre} ${porNombre.apellido || ''}${porNombre.documento ? `\nDoc: ${porNombre.documento}` : ''}${porNombre.correo ? `\nCorreo: ${porNombre.correo}` : ''}\n\n¿Seguro que quieres crear otro registro?`,
+          confirmar: true,
+        }
+      }
+    }
+
+    return null
+  }
+
   const crearCliente = async () => {
   if (!nuevo.nombre) return
+  if (!puedeGestionarClientes(userProfile?.rol)) {
+    alert('Solo el despacho puede crear clientes.')
+    return
+  }
+
+  if (!nuevo.documento?.trim()) {
+    alert('El documento (cédula/NIT) es obligatorio para evitar clientes duplicados.')
+    return
+  }
+
+  const duplicado = await buscarDuplicado({
+    documento: nuevo.documento,
+    correo: nuevo.correo,
+    nombre: nuevo.nombre,
+    apellido: nuevo.apellido,
+  })
+  if (duplicado) {
+    if (duplicado.confirmar) {
+      if (!window.confirm(duplicado.mensaje)) return
+    } else {
+      alert(duplicado.mensaje)
+      return
+    }
+  }
 
   const payload = {
-      nombre: nuevo.nombre,
-      apellido: nuevo.apellido,
-      documento: nuevo.documento,
-      correo: nuevo.correo,
+      nombre: nuevo.nombre.trim(),
+      apellido: (nuevo.apellido || '').trim(),
+      documento: (nuevo.documento || '').trim(),
+      correo: (nuevo.correo || '').trim(),
       telefono: nuevo.telefono,
       ciudad: nuevo.ciudad,
       direccion: nuevo.direccion,
@@ -53,6 +136,10 @@ export default function Clientes({ userProfile }) {
 
   if (error) {
     console.log(error)
+    if (error.code === '23505' || error.message?.includes('clients_documento')) {
+      alert('Ya existe un cliente con ese documento. Revisa el directorio.')
+      return
+    }
     alert('No se pudo crear el cliente: ' + error.message)
     return
   }
@@ -93,29 +180,65 @@ export default function Clientes({ userProfile }) {
 const q = busqueda.trim().toLowerCase()
 const clientesFiltrados = clientes.filter(c => {
   if (!q) return true
-  return (
+  const base =
     `${c.nombre} ${c.apellido || ''}`.toLowerCase().includes(q) ||
-    c.correo?.toLowerCase().includes(q) ||
     c.documento?.toLowerCase().includes(q) ||
+    c.ciudad?.toLowerCase().includes(q)
+  if (!veContacto) return base
+  return (
+    base ||
+    c.correo?.toLowerCase().includes(q) ||
     c.telefono?.toLowerCase().includes(q)
   )
 })
   
 const editarCliente = async () => {
   if (!clienteEditar.nombre) return
+  if (!puedeGestionar) {
+    alert('Solo el despacho puede editar clientes.')
+    return
+  }
+  if (!clienteEditar.documento?.trim()) {
+    alert('El documento (cédula/NIT) es obligatorio.')
+    return
+  }
+
+  const duplicado = await buscarDuplicado({
+    documento: clienteEditar.documento,
+    correo: clienteEditar.correo,
+    nombre: clienteEditar.nombre,
+    apellido: clienteEditar.apellido,
+    excluirId: clienteEditar.id,
+  })
+  if (duplicado && !duplicado.confirmar) {
+    alert(duplicado.mensaje.replace('No se creó un duplicado.', 'No se guardaron los cambios.').replace('No se creó un duplicado. Usa el cliente que ya está en el directorio.', 'No se guardaron los cambios.'))
+    return
+  }
+  if (duplicado?.confirmar && !window.confirm(duplicado.mensaje.replace('¿Seguro que quieres crear otro registro?', '¿Seguro que quieres guardar estos datos?'))) {
+    return
+  }
+
   const { error } = await supabase
     .from('clients')
     .update({
-      nombre: clienteEditar.nombre,
-      apellido: clienteEditar.apellido,
-      documento: clienteEditar.documento,
-      correo: clienteEditar.correo,
+      nombre: clienteEditar.nombre.trim(),
+      apellido: (clienteEditar.apellido || '').trim(),
+      documento: (clienteEditar.documento || '').trim(),
+      correo: (clienteEditar.correo || '').trim(),
       telefono: clienteEditar.telefono,
       ciudad: clienteEditar.ciudad,
       direccion: clienteEditar.direccion,
       tipo_persona: clienteEditar.tipo_persona
     })
     .eq('id', clienteEditar.id)
+  if (error) {
+    if (error.code === '23505' || error.message?.includes('clients_documento')) {
+      alert('Ya existe otro cliente con ese documento.')
+      return
+    }
+    alert('No se pudo guardar: ' + error.message)
+    return
+  }
   if (!error) {
     setModalEditar(false)
     setClienteEditar(null)
@@ -152,14 +275,16 @@ const editarCliente = async () => {
           <Search size={18} color="#8b949e" />
           <input
             style={styles.searchInput}
-            placeholder="Buscar por nombre, cédula/NIT o correo..."
+            placeholder={veContacto ? 'Buscar por nombre, cédula/NIT o correo...' : 'Buscar por nombre o cédula/NIT...'}
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
           />
         </div>
-        <button style={styles.btnNuevo} onClick={() => setModalOpen(true)}>
-          <Plus size={18} /> Nuevo cliente
-        </button>
+        {puedeGestionar && (
+          <button style={styles.btnNuevo} onClick={() => setModalOpen(true)}>
+            <Plus size={18} /> Nuevo cliente
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -188,13 +313,13 @@ const editarCliente = async () => {
                   </div>
                   {cliente.documento && <p style={styles.cardDoc}>Doc: {cliente.documento}</p>}
                   <div style={styles.cardDetails}>
-                    {cliente.correo && (
+                    {veContacto && cliente.correo && (
                       <div style={styles.cardDetail}>
                         <Mail size={13} color="#8b949e" />
                         <span style={styles.cardText}>{cliente.correo}</span>
                       </div>
                     )}
-                    {cliente.telefono && (
+                    {veContacto && cliente.telefono && (
                       <div style={styles.cardDetail}>
                         <Phone size={13} color="#8b949e" />
                         <span style={styles.cardText}>{cliente.telefono}</span>
@@ -205,13 +330,15 @@ const editarCliente = async () => {
                     )}
                   </div>
                 </div>
-                <button
-                  style={styles.btnEditar}
-                  onClick={() => { setClienteEditar(cliente); setConfirmarEliminar(false); setModalEditar(true) }}
-                  title="Editar cliente"
-                >
-                  <Pencil size={15} />
-                </button>
+                {puedeGestionar && (
+                  <button
+                    style={styles.btnEditar}
+                    onClick={() => { setClienteEditar(cliente); setConfirmarEliminar(false); setModalEditar(true) }}
+                    title="Editar cliente"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                )}
               </div>
             )
           })}
@@ -247,7 +374,7 @@ const editarCliente = async () => {
                 </label>
               </div>
 
-              <input style={styles.input} placeholder="Documento (CC/NIT)" value={nuevo.documento} onChange={e => setNuevo({ ...nuevo, documento: e.target.value })} />
+              <input style={styles.input} placeholder="Documento (CC/NIT) *" value={nuevo.documento} onChange={e => setNuevo({ ...nuevo, documento: e.target.value })} />
               <input style={styles.input} placeholder="Correo" type="email" value={nuevo.correo} onChange={e => setNuevo({ ...nuevo, correo: e.target.value })} />
               <input style={styles.input} placeholder="Teléfono" value={nuevo.telefono} onChange={e => setNuevo({ ...nuevo, telefono: e.target.value })} />
               <input style={styles.input} placeholder="Ciudad" value={nuevo.ciudad} onChange={e => setNuevo({ ...nuevo, ciudad: e.target.value })} />

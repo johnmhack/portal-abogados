@@ -74,7 +74,11 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
   }
 
   const fetchClientes = async () => {
-    let query = supabase.from('clients').select('id, nombre, apellido')
+    let query = supabase
+      .from('clients')
+      .select('id, nombre, apellido, documento')
+      .order('nombre', { ascending: true })
+      .order('apellido', { ascending: true })
     if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
       query = query.eq('abogado_id', userProfile.id)
     }
@@ -293,7 +297,9 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
               <select style={styles.input} value={nuevo.client_id} onChange={e => setNuevo({ ...nuevo, client_id: e.target.value })}>
                 <option value="">Seleccionar cliente (nuestro representado)</option>
                 {clientes.map(c => (
-                  <option key={c.id} value={c.id}>{c.nombre} {c.apellido}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.nombre} {c.apellido || ''}{c.documento ? ` — ${c.documento}` : ''}
+                  </option>
                 ))}
               </select>
               {nuevo.client_id && (
@@ -330,7 +336,9 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
                     >
                       <option value="">Cliente del directorio…</option>
                       {clientes.filter(c => c.id !== nuevo.client_id).map(c => (
-                        <option key={c.id} value={c.id}>{c.nombre} {c.apellido}</option>
+                        <option key={c.id} value={c.id}>
+                          {c.nombre} {c.apellido || ''}{c.documento ? ` — ${c.documento}` : ''}
+                        </option>
                       ))}
                     </select>
                     {!p.client_id && (

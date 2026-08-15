@@ -3,7 +3,7 @@ import { supabase } from '../supabase'
 import { ArrowLeft, FileText, MessageSquare, Plus, X, TrendingUp, CheckSquare, Pencil, Eye, Download, Trash2 } from 'lucide-react'
 import InformeCliente from './InformeCliente'
 import PartesCaso from '../components/PartesCaso'
-import { puedeEliminar } from '../lib/permisos'
+import { puedeEliminar, veContactoCliente, puedeEditarCaso, casoConCandado, veTodoElDespacho } from '../lib/permisos'
 
 export default function DetalleCaso({ casoId, onBack, userProfile }) {
   const [caso, setCaso] = useState(null)
@@ -21,18 +21,25 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
 
   const [clientesLista, setClientesLista] = useState([])
 
+  const veContacto = veContactoCliente(userProfile?.rol)
+  const puedeBorrar = puedeEliminar(userProfile?.rol)
+
   useEffect(() => { fetchCaso() }, [casoId])
 
   useEffect(() => {
-    supabase.from('clients').select('id, nombre, apellido').order('nombre').then(({ data }) => {
+    supabase.from('clients').select('id, nombre, apellido').order('nombre').order('apellido').then(({ data }) => {
       setClientesLista(data || [])
     })
   }, [])
 
   const fetchCaso = async () => {
+    const clientFields = veContacto
+      ? 'id, nombre, apellido, correo, telefono, documento, ciudad, direccion'
+      : 'id, nombre, apellido, documento, ciudad'
+
     let { data, error } = await supabase
       .from('cases')
-      .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion), juzgados(id, nombre, ciudad, especialidad)')
+      .select(`*, clients(${clientFields}), juzgados(id, nombre, ciudad, especialidad)`)
       .eq('id', casoId)
       .single()
 
@@ -40,7 +47,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
       console.log('fetchCaso con juzgados:', error.message)
       const fallback = await supabase
         .from('cases')
-        .select('*, clients(id, nombre, apellido, correo, telefono, documento, ciudad, direccion)')
+        .select(`*, clients(${clientFields})`)
         .eq('id', casoId)
         .single()
       data = fallback.data
@@ -51,7 +58,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
 
   const abrirEditar = async () => {
     const [{ data: clientesData }, { data: juzgadosData }] = await Promise.all([
-      supabase.from('clients').select('id, nombre, apellido').order('nombre'),
+      supabase.from('clients').select('id, nombre, apellido').order('nombre').order('apellido'),
       supabase.from('juzgados').select('id, nombre, ciudad').order('nombre'),
     ])
     setClientes(clientesData || [])
@@ -99,16 +106,31 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
 
   const guardarEdicion = async () => {
     if (!editCaso.titulo.trim()) return
+    if (!puedeEditarCaso(userProfile?.rol, caso.status) && !veTodoElDespacho(userProfile?.rol)) {
+      alert('Este caso está cerrado. Solo el despacho puede modificarlo.')
+      return
+    }
     setGuardando(true)
     const casoUpdate = { ...editCaso }
     if (!casoUpdate.client_id) casoUpdate.client_id = null
     if (!casoUpdate.juzgado_id) casoUpdate.juzgado_id = null
     if (!casoUpdate.abogado_id) casoUpdate.abogado_id = userProfile?.id || caso.abogado_id || null
     await supabase.from('cases').update(casoUpdate).eq('id', casoId)
-    if (caso.client_id || editCaso.client_id) {
+    if (veTodoElDespacho(userProfile?.rol) && (caso.client_id || editCaso.client_id)) {
       const clientId = editCaso.client_id || caso.client_id
       if (clientId && editCliente.nombre.trim()) {
-        await supabase.from('clients').update(editCliente).eq('id', clientId)
+        const clienteUpdate = {
+          nombre: editCliente.nombre,
+          apellido: editCliente.apellido,
+          documento: editCliente.documento,
+          ciudad: editCliente.ciudad,
+        }
+        if (veContacto) {
+          clienteUpdate.correo = editCliente.correo
+          clienteUpdate.telefono = editCliente.telefono
+          clienteUpdate.direccion = editCliente.direccion
+        }
+        await supabase.from('clients').update(clienteUpdate).eq('id', clientId)
       }
     }
     setGuardando(false)
@@ -135,14 +157,15 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
     setConfirmarEliminar(false)
   }
 
-  const puedeBorrar = puedeEliminar(userProfile?.rol)
-
   const statusColor = {
     activo: '#0984e3', en_proceso: '#c9a84c', audiencia: '#6c5ce7',
     cerrado: '#636e72', ganado: '#00b894', perdido: '#d63031'
   }
 
   if (!caso) return <p style={{ color: '#b2bec3' }}>Cargando...</p>
+
+  const puedeEditar = puedeEditarCaso(userProfile?.rol, caso.status)
+  const conCandado = casoConCandado(caso.status)
 
   return (
     <div>
@@ -152,9 +175,13 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
           <ArrowLeft size={18} /> Volver a casos
         </button>
         <div style={styles.accionesGrupo}>
-          <button style={styles.btnEditar} onClick={abrirEditar}>
-            <Pencil size={15} /> Editar caso
-          </button>
+          {puedeEditar ? (
+            <button style={styles.btnEditar} onClick={abrirEditar}>
+              <Pencil size={15} /> Editar caso
+            </button>
+          ) : (
+            <span style={styles.candadoBadge}>Caso cerrado · solo lectura</span>
+          )}
           <button style={styles.btnInforme} onClick={() => setMostrarInforme(true)}>
             Generar informe
           </button>
@@ -174,6 +201,11 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
             }}>
               {caso.status?.replace('_', ' ')}
             </span>
+            {conCandado && (
+              <span style={{ ...styles.badge, backgroundColor: '#636e7218', color: '#636e72' }}>
+                Candado
+              </span>
+            )}
             {caso.numero_radicado && <span style={styles.radicado}>{caso.numero_radicado}</span>}
           </div>
           <h2 style={styles.casoTitulo}>{caso.titulo}</h2>
@@ -203,7 +235,12 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
         </div>
       </div>
 
-      <PartesCaso casoId={casoId} clientes={clientesLista} puedeEditar={true} puedeBorrar={puedeBorrar} />
+      <PartesCaso
+        casoId={casoId}
+        clientes={clientesLista}
+        puedeEditar={puedeEditar}
+        puedeBorrar={puedeBorrar && puedeEditar}
+      />
 
       {modalEditar && (
         <div style={styles.overlay}>
@@ -278,7 +315,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
                 <option value="perdido">Perdido</option>
               </select>
 
-              {(editCaso.client_id || caso.client_id) && (
+              {(editCaso.client_id || caso.client_id) && veTodoElDespacho(userProfile?.rol) && (
                 <>
                   <p style={styles.sectionLabel}>Info del cliente</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -286,10 +323,14 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
                     <input style={styles.input} placeholder="Apellido" value={editCliente.apellido} onChange={e => setEditCliente({ ...editCliente, apellido: e.target.value })} />
                   </div>
                   <input style={styles.input} placeholder="Documento" value={editCliente.documento} onChange={e => setEditCliente({ ...editCliente, documento: e.target.value })} />
-                  <input style={styles.input} placeholder="Correo" value={editCliente.correo} onChange={e => setEditCliente({ ...editCliente, correo: e.target.value })} />
-                  <input style={styles.input} placeholder="Teléfono" value={editCliente.telefono} onChange={e => setEditCliente({ ...editCliente, telefono: e.target.value })} />
+                  {veContacto && (
+                    <>
+                      <input style={styles.input} placeholder="Correo" value={editCliente.correo} onChange={e => setEditCliente({ ...editCliente, correo: e.target.value })} />
+                      <input style={styles.input} placeholder="Teléfono" value={editCliente.telefono} onChange={e => setEditCliente({ ...editCliente, telefono: e.target.value })} />
+                      <input style={styles.input} placeholder="Dirección" value={editCliente.direccion} onChange={e => setEditCliente({ ...editCliente, direccion: e.target.value })} />
+                    </>
+                  )}
                   <input style={styles.input} placeholder="Ciudad" value={editCliente.ciudad} onChange={e => setEditCliente({ ...editCliente, ciudad: e.target.value })} />
-                  <input style={styles.input} placeholder="Dirección" value={editCliente.direccion} onChange={e => setEditCliente({ ...editCliente, direccion: e.target.value })} />
                 </>
               )}
 
@@ -348,16 +389,16 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
       </div>
 
       {/* CONTENIDO */}
-      {tab === 'eventos' && <EventosTab casoId={casoId} />}
-      {tab === 'etapas' && <EtapasTab casoId={casoId} puedeBorrar={puedeBorrar} />}
-      {tab === 'tareas' && <TareasTab casoId={casoId} puedeBorrar={puedeBorrar} />}
-      {tab === 'documentos' && <DocumentosTab casoId={casoId} puedeBorrar={puedeBorrar} />}
+      {tab === 'eventos' && <EventosTab casoId={casoId} puedeEditar={puedeEditar} />}
+      {tab === 'etapas' && <EtapasTab casoId={casoId} puedeBorrar={puedeBorrar && puedeEditar} puedeEditar={puedeEditar} />}
+      {tab === 'tareas' && <TareasTab casoId={casoId} puedeBorrar={puedeBorrar && puedeEditar} puedeEditar={puedeEditar} />}
+      {tab === 'documentos' && <DocumentosTab casoId={casoId} puedeBorrar={puedeBorrar && puedeEditar} puedeEditar={puedeEditar} />}
     </div>
   )
 }
 
 // ── EVENTOS ──
-function EventosTab({ casoId }) {
+function EventosTab({ casoId, puedeEditar = true }) {
   const [eventos, setEventos] = useState([])
   const [nuevo, setNuevo] = useState('')
   const [tipo, setTipo] = useState('actuacion')
@@ -380,17 +421,19 @@ function EventosTab({ casoId }) {
 
   return (
     <div style={styles.tabContent}>
-      <div style={styles.inputRow}>
-        <select style={{ ...styles.input, maxWidth: '160px' }} value={tipo} onChange={e => setTipo(e.target.value)}>
-          <option value="actuacion">Actuación</option>
-          <option value="audiencia">Audiencia</option>
-          <option value="notificacion">Notificación</option>
-          <option value="decision">Decisión</option>
-          <option value="otro">Otro</option>
-        </select>
-        <textarea style={{ ...styles.textarea, flex: 1 }} placeholder="Describe la actuación..." value={nuevo} onChange={e => setNuevo(e.target.value)} />
-        <button style={styles.btnAgregar} onClick={agregar}><Plus size={18} /> Agregar</button>
-      </div>
+      {puedeEditar && (
+        <div style={styles.inputRow}>
+          <select style={{ ...styles.input, maxWidth: '160px' }} value={tipo} onChange={e => setTipo(e.target.value)}>
+            <option value="actuacion">Actuación</option>
+            <option value="audiencia">Audiencia</option>
+            <option value="notificacion">Notificación</option>
+            <option value="decision">Decisión</option>
+            <option value="otro">Otro</option>
+          </select>
+          <textarea style={{ ...styles.textarea, flex: 1 }} placeholder="Describe la actuación..." value={nuevo} onChange={e => setNuevo(e.target.value)} />
+          <button style={styles.btnAgregar} onClick={agregar}><Plus size={18} /> Agregar</button>
+        </div>
+      )}
       {eventos.length === 0 ? (
         <p style={{ color: '#b2bec3', textAlign: 'center', padding: '40px' }}>No hay actuaciones</p>
       ) : (
@@ -409,7 +452,7 @@ function EventosTab({ casoId }) {
 }
 
 // ── ETAPAS ──
-function EtapasTab({ casoId, puedeBorrar = true }) {
+function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
   const [etapas, setEtapas] = useState([])
   const [docsPorEtapa, setDocsPorEtapa] = useState({})
   const [tareasPorEtapa, setTareasPorEtapa] = useState({})
@@ -556,7 +599,9 @@ function EtapasTab({ casoId, puedeBorrar = true }) {
 
   return (
     <div style={styles.tabContent}>
-      <button style={styles.btnNuevo} onClick={() => setModalNueva(true)}><Plus size={16} /> Agregar etapa</button>
+      {puedeEditar && (
+        <button style={styles.btnNuevo} onClick={() => setModalNueva(true)}><Plus size={16} /> Agregar etapa</button>
+      )}
 
       {etapas.length > 0 && (
         <div style={styles.progresoBox}>
@@ -670,15 +715,17 @@ function EtapasTab({ casoId, puedeBorrar = true }) {
                       </div>
                     )}
 
-                    <label style={styles.btnSubirMini}>
-                      {subiendoStage === etapa.id ? 'Subiendo...' : '+ Subir documento'}
-                      <input
-                        type="file"
-                        style={{ display: 'none' }}
-                        disabled={subiendoStage === etapa.id}
-                        onChange={e => subirDocEtapa(etapa.id, e)}
-                      />
-                    </label>
+                    {puedeEditar && (
+                      <label style={styles.btnSubirMini}>
+                        {subiendoStage === etapa.id ? 'Subiendo...' : '+ Subir documento'}
+                        <input
+                          type="file"
+                          style={{ display: 'none' }}
+                          disabled={subiendoStage === etapa.id}
+                          onChange={e => subirDocEtapa(etapa.id, e)}
+                        />
+                      </label>
+                    )}
 
                     <label style={styles.etapaLabel}>Tareas</label>
                     {tareas.map(t => (
@@ -686,8 +733,9 @@ function EtapasTab({ casoId, puedeBorrar = true }) {
                         <input
                           type="checkbox"
                           checked={!!t.completado}
-                          onChange={() => toggleTareaEtapa(t.id, t.completado)}
-                          style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                          onChange={() => puedeEditar && toggleTareaEtapa(t.id, t.completado)}
+                          disabled={!puedeEditar}
+                          style={{ cursor: puedeEditar ? 'pointer' : 'default', width: '16px', height: '16px' }}
                         />
                         <span style={{
                           fontSize: '13px',
@@ -702,18 +750,20 @@ function EtapasTab({ casoId, puedeBorrar = true }) {
                         )}
                       </div>
                     ))}
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        style={{ ...styles.input, flex: 1 }}
-                        placeholder="Nueva tarea de esta etapa..."
-                        value={nuevaTarea[etapa.id] || ''}
-                        onChange={e => setNuevaTarea({ ...nuevaTarea, [etapa.id]: e.target.value })}
-                        onKeyDown={e => e.key === 'Enter' && agregarTareaEtapa(etapa.id)}
-                      />
-                      <button style={styles.btnAgregarMini} onClick={() => agregarTareaEtapa(etapa.id)}>
-                        <Plus size={16} />
-                      </button>
-                    </div>
+                    {puedeEditar && (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          style={{ ...styles.input, flex: 1 }}
+                          placeholder="Nueva tarea de esta etapa..."
+                          value={nuevaTarea[etapa.id] || ''}
+                          onChange={e => setNuevaTarea({ ...nuevaTarea, [etapa.id]: e.target.value })}
+                          onKeyDown={e => e.key === 'Enter' && agregarTareaEtapa(etapa.id)}
+                        />
+                        <button style={styles.btnAgregarMini} onClick={() => agregarTareaEtapa(etapa.id)}>
+                          <Plus size={16} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -722,7 +772,7 @@ function EtapasTab({ casoId, puedeBorrar = true }) {
         })
       )}
 
-      {modalNueva && (
+      {modalNueva && puedeEditar && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
             <div style={styles.modalHeader}>
@@ -742,7 +792,7 @@ function EtapasTab({ casoId, puedeBorrar = true }) {
 }
 
 // ── TAREAS ──
-function TareasTab({ casoId, puedeBorrar = true }) {
+function TareasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
   const [tareas, setTareas] = useState([])
   const [nueva, setNueva] = useState('')
 
@@ -776,16 +826,18 @@ function TareasTab({ casoId, puedeBorrar = true }) {
 
   return (
     <div style={styles.tabContent}>
-      <div style={styles.inputRow}>
-        <input style={{ ...styles.input, flex: 1 }} placeholder="Nueva tarea general del caso..." value={nueva} onChange={e => setNueva(e.target.value)} onKeyDown={e => e.key === 'Enter' && agregar()} />
-        <button style={styles.btnAgregar} onClick={agregar}><Plus size={18} /> Agregar</button>
-      </div>
+      {puedeEditar && (
+        <div style={styles.inputRow}>
+          <input style={{ ...styles.input, flex: 1 }} placeholder="Nueva tarea general del caso..." value={nueva} onChange={e => setNueva(e.target.value)} onKeyDown={e => e.key === 'Enter' && agregar()} />
+          <button style={styles.btnAgregar} onClick={agregar}><Plus size={18} /> Agregar</button>
+        </div>
+      )}
       {tareas.length === 0 ? (
         <p style={{ color: '#b2bec3', textAlign: 'center', padding: '40px' }}>No hay tareas</p>
       ) : (
         tareas.map(t => (
           <div key={t.id} style={{ ...styles.tareaCard, opacity: t.completado ? 0.6 : 1 }}>
-            <input type="checkbox" checked={t.completado} onChange={() => toggleTarea(t.id, t.completado)} style={{ cursor: 'pointer', width: '18px', height: '18px' }} />
+            <input type="checkbox" checked={t.completado} onChange={() => puedeEditar && toggleTarea(t.id, t.completado)} disabled={!puedeEditar} style={{ cursor: puedeEditar ? 'pointer' : 'default', width: '18px', height: '18px' }} />
             <div style={{ flex: 1 }}>
               <span style={{ fontSize: '14px', color: '#2d3436', textDecoration: t.completado ? 'line-through' : 'none' }}>{t.titulo}</span>
               {t.case_stages?.nombre && (
@@ -806,7 +858,7 @@ function TareasTab({ casoId, puedeBorrar = true }) {
 }
 
 // ── DOCUMENTOS ──
-function DocumentosTab({ casoId, puedeBorrar = true }) {
+function DocumentosTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
   const [documentos, setDocumentos] = useState([])
   const [subiendo, setSubiendo] = useState(false)
   const [vista, setVista] = useState(null)
@@ -882,10 +934,12 @@ function DocumentosTab({ casoId, puedeBorrar = true }) {
 
   return (
     <div style={styles.tabContent}>
-      <label style={styles.btnSubir}>
-        {subiendo ? 'Subiendo...' : '📎 Subir documento'}
-        <input type="file" style={{ display: 'none' }} onChange={subirArchivo} disabled={subiendo} />
-      </label>
+      {puedeEditar && (
+        <label style={styles.btnSubir}>
+          {subiendo ? 'Subiendo...' : '📎 Subir documento'}
+          <input type="file" style={{ display: 'none' }} onChange={subirArchivo} disabled={subiendo} />
+        </label>
+      )}
       {documentos.length === 0 ? (
         <p style={{ color: '#b2bec3', textAlign: 'center', padding: '40px' }}>No hay documentos</p>
       ) : (
@@ -960,7 +1014,18 @@ const styles = {
     fontWeight: '500',
     padding: '6px 0',
   },
-  accionesGrupo: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
+  accionesGrupo: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' },
+  candadoBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '10px 14px',
+    borderRadius: '10px',
+    backgroundColor: '#636e7214',
+    color: '#636e72',
+    fontSize: '13px',
+    fontWeight: '600',
+    border: '1px solid #dfe6e9',
+  },
   btnEditar: {
     display: 'flex',
     alignItems: 'center',

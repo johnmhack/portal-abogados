@@ -4,7 +4,7 @@ import logo from '../assets/LOGO_RUBY_RAMOS_SIMBOLO.svg'
 import {
   LayoutDashboard, Briefcase, Users, UserCheck,
   LogOut, Menu, X, Plus, CheckCircle, Settings, AlertCircle, FileText, Download,
-  Calendar, Landmark, Eye
+  Calendar, Landmark, Eye, Trash2
 } from 'lucide-react'
 import Casos from './Casos'
 import Clientes from './Clientes'
@@ -45,7 +45,7 @@ export default function DashboardAdmin({ session, userProfile }) {
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
     { id: 'casos', label: 'Casos', icon: Briefcase },
     { id: 'asignar', label: 'Asignar casos', icon: UserCheck },
-    { id: 'abogados', label: 'Abogados', icon: UserCheck },
+    { id: 'abogados', label: 'Equipo', icon: UserCheck },
     { id: 'clientes', label: 'Clientes', icon: Users },
     { id: 'juzgados', label: 'Juzgados', icon: Landmark },
     { id: 'documentos', label: 'Documentos', icon: FileText },
@@ -172,7 +172,13 @@ export default function DashboardAdmin({ session, userProfile }) {
           {activePage === 'dashboard' && <AdminDashboard />}
           {activePage === 'casos' && <Casos session={session} userProfile={userProfile} />}
           {activePage === 'asignar' && <AdminCasos />}
-          {activePage === 'abogados' && <AdminAbogados esSuperadmin={esSuperadmin} />}
+          {activePage === 'abogados' && (
+            <AdminAbogados
+              esSuperadmin={esSuperadmin}
+              esAsistente={esAsistente}
+              userProfile={userProfile}
+            />
+          )}
           {activePage === 'clientes' && <Clientes session={session} userProfile={userProfile} />}
           {activePage === 'juzgados' && <Juzgados userProfile={userProfile} />}
           {activePage === 'documentos' && <Documentos userProfile={userProfile} />}
@@ -294,8 +300,9 @@ function AdminCasos() {
   const fetchAbogados = async () => {
     const { data } = await supabase
       .from('users')
-      .select('id, nombre, apellido, rol')
+      .select('id, nombre, apellido, rol, activo')
       .in('rol', STAFF_ROLES)
+      .eq('activo', true)
       .order('nombre')
     setAbogados(data || [])
   }
@@ -401,7 +408,7 @@ function AdminCasos() {
   )
 }
 
-function AdminAbogados({ esSuperadmin }) {
+function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
   const [abogados, setAbogados] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
   const [nuevo, setNuevo] = useState({ nombre: '', apellido: '', email: '', telefono: '', rol: 'abogado' })
@@ -409,6 +416,8 @@ function AdminAbogados({ esSuperadmin }) {
   const [creando, setCreando] = useState(false)
   const [subiendoId, setSubiendoId] = useState(null)
   const [vistaContrato, setVistaContrato] = useState(null)
+  const [togglingId, setTogglingId] = useState(null)
+  const [borrandoId, setBorrandoId] = useState(null)
 
   useEffect(() => { fetchAbogados() }, [])
 
@@ -416,6 +425,57 @@ function AdminAbogados({ esSuperadmin }) {
     const roles = esSuperadmin ? [...STAFF_ROLES, 'admin'] : STAFF_ROLES
     const { data } = await supabase.from('users').select('*').in('rol', roles).order('nombre')
     setAbogados(data || [])
+  }
+
+  const puedeToggleAcceso = (a) => {
+    if (['admin', 'superadmin'].includes(a.rol)) return false
+    if (a.id === userProfile?.id) return false
+    return ['abogado', 'socio', 'asistente'].includes(a.rol)
+  }
+
+  const toggleActivo = async (abogado) => {
+    if (!puedeToggleAcceso(abogado)) return
+    const nuevoEstado = !(abogado.activo !== false)
+    setTogglingId(abogado.id)
+    const { error } = await supabase
+      .from('users')
+      .update({ activo: nuevoEstado })
+      .eq('id', abogado.id)
+    setTogglingId(null)
+    if (error) {
+      alert('No se pudo cambiar el acceso: ' + error.message)
+      return
+    }
+    setAbogados(prev => prev.map(a => a.id === abogado.id ? { ...a, activo: nuevoEstado } : a))
+  }
+
+  const eliminarAbogado = async (abogado) => {
+    if (!esSuperadmin) return
+    if (abogado.rol === 'superadmin') {
+      alert('No se puede eliminar un superadmin.')
+      return
+    }
+    if (abogado.id === userProfile?.id) {
+      alert('No puedes eliminarte a ti mismo.')
+      return
+    }
+    const nombre = `${abogado.nombre || ''} ${abogado.apellido || ''}`.trim()
+    if (!window.confirm(`¿Eliminar permanentemente a ${nombre} (${abogado.email})?\n\nEsta acción no se puede deshacer. Sus casos quedarán sin abogado asignado.`)) {
+      return
+    }
+    setBorrandoId(abogado.id)
+    // Liberar casos antes de borrar
+    await supabase.from('cases').update({ abogado_id: null }).eq('abogado_id', abogado.id)
+    if (abogado.contrato_url) {
+      await supabase.storage.from('contratos').remove([abogado.contrato_url])
+    }
+    const { error } = await supabase.from('users').delete().eq('id', abogado.id)
+    setBorrandoId(null)
+    if (error) {
+      alert('No se pudo eliminar: ' + error.message)
+      return
+    }
+    fetchAbogados()
   }
 
   const obtenerContratoUrl = async (abogado) => {
@@ -543,14 +603,16 @@ function AdminAbogados({ esSuperadmin }) {
   return (
     <div style={styles.card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h3 style={{ ...styles.cardTitle, marginBottom: 0 }}>Equipo de abogados</h3>
+        <h3 style={{ ...styles.cardTitle, marginBottom: 0 }}>Equipo</h3>
         <button style={styles.btnNuevo} onClick={() => setModalOpen(true)}>
           <Plus size={16} /> Nuevo
         </button>
       </div>
 
-      {abogados.map(a => (
-        <div key={a.id} style={styles.userRow}>
+      {abogados.map(a => {
+        const estaActivo = a.activo !== false
+        return (
+        <div key={a.id} style={{ ...styles.userRow, opacity: estaActivo ? 1 : 0.72 }}>
           <div style={styles.userAvatar}>{a.nombre?.[0]}{a.apellido?.[0]}</div>
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a2e', margin: 0 }}>{a.nombre} {a.apellido}</p>
@@ -562,8 +624,35 @@ function AdminAbogados({ esSuperadmin }) {
             ) : (
               <p style={{ fontSize: '12px', color: '#d63031', margin: '4px 0 0' }}>Sin contrato SAR</p>
             )}
+            {!estaActivo && (
+              <p style={{ fontSize: '12px', color: '#d63031', margin: '4px 0 0', fontWeight: 600 }}>Acceso desactivado</p>
+            )}
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {puedeToggleAcceso(a) && (
+              <label style={styles.toggleWrap} title={estaActivo ? 'Desactivar acceso' : 'Activar acceso'}>
+                <span style={{ ...styles.toggleLabel, color: estaActivo ? '#00b894' : '#b2bec3' }}>
+                  {estaActivo ? 'Activo' : 'Inactivo'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={estaActivo}
+                  disabled={togglingId === a.id}
+                  onClick={() => toggleActivo(a)}
+                  style={{
+                    ...styles.toggleTrack,
+                    backgroundColor: estaActivo ? '#00b894' : '#dfe6e9',
+                    opacity: togglingId === a.id ? 0.6 : 1,
+                  }}
+                >
+                  <span style={{
+                    ...styles.toggleThumb,
+                    transform: estaActivo ? 'translateX(18px)' : 'translateX(2px)',
+                  }} />
+                </button>
+              </label>
+            )}
             {a.contrato_url && (
               <>
                 <button style={styles.btnAcceso} onClick={() => verContrato(a)} title="Ver contrato">
@@ -591,9 +680,20 @@ function AdminAbogados({ esSuperadmin }) {
             <span style={{ ...styles.badge, backgroundColor: (rolColor[a.rol] || '#636e72') + '20', color: rolColor[a.rol] || '#636e72' }}>
               {a.rol}
             </span>
+            {esSuperadmin && a.rol !== 'superadmin' && a.id !== userProfile?.id && (
+              <button
+                style={styles.btnBorrarUser}
+                title="Eliminar usuario"
+                disabled={borrandoId === a.id}
+                onClick={() => eliminarAbogado(a)}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
           </div>
         </div>
-      ))}
+        )
+      })}
 
       {vistaContrato && (
         <div style={styles.overlay} onClick={cerrarVistaContrato}>
@@ -1004,6 +1104,28 @@ const styles = {
     backgroundColor: '#1A474F', color: '#CFB27E', border: 'none',
     padding: '6px 12px', borderRadius: '6px', cursor: 'pointer',
     fontWeight: '600', fontSize: '12px',
+    display: 'inline-flex', alignItems: 'center', gap: '4px',
+  },
+  toggleWrap: {
+    display: 'inline-flex', alignItems: 'center', gap: '8px',
+    cursor: 'pointer', userSelect: 'none',
+  },
+  toggleLabel: { fontSize: '12px', fontWeight: '700' },
+  toggleTrack: {
+    width: '40px', height: '22px', borderRadius: '999px', border: 'none',
+    padding: 0, cursor: 'pointer', position: 'relative', transition: 'background-color 0.2s',
+    flexShrink: 0,
+  },
+  toggleThumb: {
+    position: 'absolute', top: '2px', left: 0,
+    width: '18px', height: '18px', borderRadius: '50%',
+    backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+    transition: 'transform 0.2s',
+  },
+  btnBorrarUser: {
+    backgroundColor: '#fff0f0', color: '#d63031', border: '1px solid #ffcccc',
+    padding: '6px 10px', borderRadius: '6px', cursor: 'pointer',
+    display: 'inline-flex', alignItems: 'center',
   },
   overlay: {
     position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
