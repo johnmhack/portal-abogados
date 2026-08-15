@@ -6,6 +6,7 @@ const ETAPAS_PREDEFINIDAS = {
   ejecutivo: [
     'Radicación de demanda',
     'Admisión de demanda',
+    'Medidas cautelares',
     'Mandamiento de pago',
     'Notificación al demandado',
     'Excepciones',
@@ -15,6 +16,7 @@ const ETAPAS_PREDEFINIDAS = {
   laboral: [
     'Radicación de demanda',
     'Admisión de demanda',
+    'Medidas cautelares',
     'Notificación',
     'Audiencia de conciliación',
     'Audiencia de trámite',
@@ -25,6 +27,7 @@ const ETAPAS_PREDEFINIDAS = {
   administrativo: [
     'Radicación de demanda',
     'Admisión de demanda',
+    'Medidas cautelares',
     'Notificación',
     'Periodo probatorio',
     'Alegatos de conclusión',
@@ -34,6 +37,7 @@ const ETAPAS_PREDEFINIDAS = {
   civil: [
     'Radicación de demanda',
     'Admisión de demanda',
+    'Medidas cautelares',
     'Notificación',
     'Periodo probatorio',
     'Audiencia',
