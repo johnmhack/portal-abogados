@@ -233,7 +233,7 @@ function AdminDashboard() {
   const statsData = [
     { label: 'Total Casos', value: stats.casos, icon: Briefcase, color: '#0984e3' },
     { label: 'Clientes', value: stats.clientes, icon: Users, color: '#c9a84c' },
-    { label: 'Abogados', value: stats.abogados, icon: UserCheck, color: '#6c5ce7' },
+    { label: 'Equipo', value: stats.abogados, icon: UserCheck, color: '#6c5ce7' },
     { label: 'Casos Ganados', value: stats.ganados, icon: CheckCircle, color: '#00b894' },
   ]
 
