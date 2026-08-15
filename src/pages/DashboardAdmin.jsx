@@ -14,6 +14,7 @@ import Juzgados from './Juzgados'
 import Estadisticas from './Estadisticas'
 import NotificacionesCampana from '../components/NotificacionesCampana'
 import InformeAbogado from './InformeAbogado'
+import { veEstadisticas } from '../lib/permisos'
 
 const STAFF_ROLES = ['abogado', 'socio', 'asistente', 'contador']
 const OPS_ROLES = [...STAFF_ROLES, 'cliente']
@@ -36,9 +37,14 @@ const statusColor = {
 
 export default function DashboardAdmin({ session, userProfile }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [activePage, setActivePage] = useState(() => sessionStorage.getItem('sar_admin_page') || 'dashboard')
+  const [activePage, setActivePage] = useState(() => {
+    const guardada = sessionStorage.getItem('sar_admin_page') || 'dashboard'
+    if (guardada === 'estadisticas' && !veEstadisticas(userProfile?.rol)) return 'dashboard'
+    return guardada
+  })
   const esSuperadmin = userProfile?.rol === 'superadmin'
   const esAsistente = userProfile?.rol === 'asistente'
+  const puedeVerEstadisticas = veEstadisticas(userProfile?.rol)
 
   useEffect(() => {
     sessionStorage.setItem('sar_admin_page', activePage)
@@ -46,7 +52,7 @@ export default function DashboardAdmin({ session, userProfile }) {
 
   const menuItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
-    { id: 'estadisticas', label: 'Estadísticas', icon: ChartColumn },
+    ...(puedeVerEstadisticas ? [{ id: 'estadisticas', label: 'Estadísticas', icon: ChartColumn }] : []),
     { id: 'casos', label: 'Casos', icon: Briefcase },
     { id: 'asignar', label: 'Asignar casos', icon: UserCheck },
     { id: 'abogados', label: 'Equipo', icon: UserCheck },

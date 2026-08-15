@@ -18,6 +18,11 @@ export function veContactoCliente(rol) {
   return veTodoElDespacho(rol)
 }
 
+/** Estadísticas del despacho: dirección (Ruby) y superadmin. El asistente no. */
+export function veEstadisticas(rol) {
+  return ['admin', 'superadmin'].includes(rol)
+}
+
 const ESTADOS_CANDADO = ['cerrado', 'ganado', 'perdido']
 
 export function casoConCandado(status) {
