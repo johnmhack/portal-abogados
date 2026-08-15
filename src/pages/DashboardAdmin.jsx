@@ -4,16 +4,18 @@ import logo from '../assets/LOGO_RUBY_RAMOS_SIMBOLO.svg'
 import {
   LayoutDashboard, Briefcase, Users, UserCheck,
   LogOut, Menu, X, Plus, CheckCircle, Settings, AlertCircle, FileText, Download,
-  Calendar, Landmark, Eye, Trash2
+  Calendar, Landmark, Eye, Trash2, ClipboardList, ChartColumn
 } from 'lucide-react'
 import Casos from './Casos'
 import Clientes from './Clientes'
 import Documentos from './Documentos'
 import Audiencias from './Audiencias'
 import Juzgados from './Juzgados'
+import Estadisticas from './Estadisticas'
 import NotificacionesCampana from '../components/NotificacionesCampana'
+import InformeAbogado from './InformeAbogado'
 
-const STAFF_ROLES = ['abogado', 'socio', 'asistente']
+const STAFF_ROLES = ['abogado', 'socio', 'asistente', 'contador']
 const OPS_ROLES = [...STAFF_ROLES, 'cliente']
 const ALL_ROLES = [...OPS_ROLES, 'admin', 'superadmin']
 
@@ -21,6 +23,7 @@ const rolColor = {
   abogado: '#0984e3',
   socio: '#6c5ce7',
   asistente: '#c9a84c',
+  contador: '#2d6a4f',
   cliente: '#00b894',
   admin: '#d63031',
   superadmin: '#e17055',
@@ -43,6 +46,7 @@ export default function DashboardAdmin({ session, userProfile }) {
 
   const menuItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
+    { id: 'estadisticas', label: 'Estadísticas', icon: ChartColumn },
     { id: 'casos', label: 'Casos', icon: Briefcase },
     { id: 'asignar', label: 'Asignar casos', icon: UserCheck },
     { id: 'abogados', label: 'Equipo', icon: UserCheck },
@@ -59,6 +63,7 @@ export default function DashboardAdmin({ session, userProfile }) {
   const isHome = activePage === 'dashboard'
   const pageLabel = menuItems.find(m => m.id === activePage)?.label
   const pageSubtitles = {
+    estadisticas: 'Indicadores y gráficas del despacho',
     casos: 'Expedientes y seguimiento',
     asignar: 'Asignar abogados a cada caso',
     abogados: 'Equipo del despacho y contratos SAR',
@@ -170,6 +175,7 @@ export default function DashboardAdmin({ session, userProfile }) {
 
         <div style={styles.content}>
           {activePage === 'dashboard' && <AdminDashboard />}
+          {activePage === 'estadisticas' && <Estadisticas />}
           {activePage === 'casos' && <Casos session={session} userProfile={userProfile} />}
           {activePage === 'asignar' && <AdminCasos />}
           {activePage === 'abogados' && (
@@ -418,6 +424,7 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
   const [vistaContrato, setVistaContrato] = useState(null)
   const [togglingId, setTogglingId] = useState(null)
   const [borrandoId, setBorrandoId] = useState(null)
+  const [informeAbogado, setInformeAbogado] = useState(null)
 
   useEffect(() => { fetchAbogados() }, [])
 
@@ -430,7 +437,7 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
   const puedeToggleAcceso = (a) => {
     if (['admin', 'superadmin'].includes(a.rol)) return false
     if (a.id === userProfile?.id) return false
-    return ['abogado', 'socio', 'asistente'].includes(a.rol)
+    return ['abogado', 'socio', 'asistente', 'contador'].includes(a.rol)
   }
 
   const toggleActivo = async (abogado) => {
@@ -600,6 +607,128 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
     setContratoFile(null)
   }
 
+  const gruposEquipo = [
+    {
+      id: 'abogados',
+      titulo: 'Abogados',
+      color: '#0984e3',
+      roles: ['abogado', 'socio'],
+    },
+    {
+      id: 'contadores',
+      titulo: 'Contadores',
+      color: '#2d6a4f',
+      roles: ['contador'],
+    },
+    {
+      id: 'asistentes',
+      titulo: 'Asistentes',
+      color: '#c9a84c',
+      roles: ['asistente'],
+    },
+    ...(esSuperadmin ? [{
+      id: 'admins',
+      titulo: 'Administración',
+      color: '#d63031',
+      roles: ['admin'],
+    }] : []),
+  ]
+
+  const renderMiembro = (a) => {
+    const estaActivo = a.activo !== false
+    return (
+      <div key={a.id} style={{ ...styles.userRow, opacity: estaActivo ? 1 : 0.72 }}>
+        <div style={styles.userAvatar}>{a.nombre?.[0]}{a.apellido?.[0]}</div>
+        <div style={{ flex: 1 }}>
+          <p style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a2e', margin: 0 }}>{a.nombre} {a.apellido}</p>
+          <p style={{ fontSize: '13px', color: '#b2bec3', margin: '4px 0 0' }}>{a.email}</p>
+          {a.contrato_url ? (
+            <p style={{ fontSize: '12px', color: '#00b894', margin: '4px 0 0' }}>
+              Contrato: {a.contrato_nombre || 'Adjunto'}
+            </p>
+          ) : (
+            <p style={{ fontSize: '12px', color: '#d63031', margin: '4px 0 0' }}>Sin contrato SAR</p>
+          )}
+          {!estaActivo && (
+            <p style={{ fontSize: '12px', color: '#d63031', margin: '4px 0 0', fontWeight: 600 }}>Acceso desactivado</p>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {['abogado', 'socio', 'contador'].includes(a.rol) && (
+            <button
+              style={styles.btnAcceso}
+              title="Generar informe de gestión"
+              onClick={() => setInformeAbogado(a)}
+            >
+              <ClipboardList size={14} /> Informe
+            </button>
+          )}
+          {puedeToggleAcceso(a) && (
+            <label style={styles.toggleWrap} title={estaActivo ? 'Desactivar acceso' : 'Activar acceso'}>
+              <span style={{ ...styles.toggleLabel, color: estaActivo ? '#00b894' : '#b2bec3' }}>
+                {estaActivo ? 'Activo' : 'Inactivo'}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={estaActivo}
+                disabled={togglingId === a.id}
+                onClick={() => toggleActivo(a)}
+                style={{
+                  ...styles.toggleTrack,
+                  backgroundColor: estaActivo ? '#00b894' : '#dfe6e9',
+                  opacity: togglingId === a.id ? 0.6 : 1,
+                }}
+              >
+                <span style={{
+                  ...styles.toggleThumb,
+                  transform: estaActivo ? 'translateX(18px)' : 'translateX(2px)',
+                }} />
+              </button>
+            </label>
+          )}
+          {a.contrato_url && (
+            <>
+              <button style={styles.btnAcceso} onClick={() => verContrato(a)} title="Ver contrato">
+                <Eye size={14} /> Ver
+              </button>
+              <button style={styles.btnAcceso} onClick={() => descargarContrato(a)} title="Descargar contrato">
+                <Download size={14} />
+              </button>
+            </>
+          )}
+          <label style={{ ...styles.btnAcceso, cursor: subiendoId === a.id ? 'wait' : 'pointer', opacity: subiendoId === a.id ? 0.6 : 1 }}>
+            <FileText size={14} /> {a.contrato_url ? 'Reemplazar' : 'Subir contrato'}
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx,image/jpeg,image/png"
+              style={{ display: 'none' }}
+              disabled={subiendoId === a.id}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (file) reemplazarContrato(a, file)
+              }}
+            />
+          </label>
+          <span style={{ ...styles.badge, backgroundColor: (rolColor[a.rol] || '#636e72') + '20', color: rolColor[a.rol] || '#636e72' }}>
+            {a.rol}
+          </span>
+          {esSuperadmin && a.rol !== 'superadmin' && a.id !== userProfile?.id && (
+            <button
+              style={styles.btnBorrarUser}
+              title="Eliminar usuario"
+              disabled={borrandoId === a.id}
+              onClick={() => eliminarAbogado(a)}
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={styles.card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -609,91 +738,35 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
         </button>
       </div>
 
-      {abogados.map(a => {
-        const estaActivo = a.activo !== false
+      {gruposEquipo.map(grupo => {
+        const miembros = abogados
+          .filter(a => grupo.roles.includes(a.rol))
+          .sort((a, b) => `${a.nombre} ${a.apellido || ''}`.localeCompare(`${b.nombre} ${b.apellido || ''}`, 'es'))
+        if (miembros.length === 0) return null
         return (
-        <div key={a.id} style={{ ...styles.userRow, opacity: estaActivo ? 1 : 0.72 }}>
-          <div style={styles.userAvatar}>{a.nombre?.[0]}{a.apellido?.[0]}</div>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a2e', margin: 0 }}>{a.nombre} {a.apellido}</p>
-            <p style={{ fontSize: '13px', color: '#b2bec3', margin: '4px 0 0' }}>{a.email}</p>
-            {a.contrato_url ? (
-              <p style={{ fontSize: '12px', color: '#00b894', margin: '4px 0 0' }}>
-                Contrato: {a.contrato_nombre || 'Adjunto'}
-              </p>
-            ) : (
-              <p style={{ fontSize: '12px', color: '#d63031', margin: '4px 0 0' }}>Sin contrato SAR</p>
-            )}
-            {!estaActivo && (
-              <p style={{ fontSize: '12px', color: '#d63031', margin: '4px 0 0', fontWeight: 600 }}>Acceso desactivado</p>
-            )}
+          <div key={grupo.id} style={styles.equipoGrupo}>
+            <div style={styles.equipoGrupoHeader}>
+              <span style={{ ...styles.equipoGrupoTitulo, color: grupo.color }}>{grupo.titulo}</span>
+              <span style={styles.equipoGrupoCount}>{miembros.length}</span>
+            </div>
+            {miembros.map(renderMiembro)}
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {puedeToggleAcceso(a) && (
-              <label style={styles.toggleWrap} title={estaActivo ? 'Desactivar acceso' : 'Activar acceso'}>
-                <span style={{ ...styles.toggleLabel, color: estaActivo ? '#00b894' : '#b2bec3' }}>
-                  {estaActivo ? 'Activo' : 'Inactivo'}
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={estaActivo}
-                  disabled={togglingId === a.id}
-                  onClick={() => toggleActivo(a)}
-                  style={{
-                    ...styles.toggleTrack,
-                    backgroundColor: estaActivo ? '#00b894' : '#dfe6e9',
-                    opacity: togglingId === a.id ? 0.6 : 1,
-                  }}
-                >
-                  <span style={{
-                    ...styles.toggleThumb,
-                    transform: estaActivo ? 'translateX(18px)' : 'translateX(2px)',
-                  }} />
-                </button>
-              </label>
-            )}
-            {a.contrato_url && (
-              <>
-                <button style={styles.btnAcceso} onClick={() => verContrato(a)} title="Ver contrato">
-                  <Eye size={14} /> Ver
-                </button>
-                <button style={styles.btnAcceso} onClick={() => descargarContrato(a)} title="Descargar contrato">
-                  <Download size={14} />
-                </button>
-              </>
-            )}
-            <label style={{ ...styles.btnAcceso, cursor: subiendoId === a.id ? 'wait' : 'pointer', opacity: subiendoId === a.id ? 0.6 : 1 }}>
-              <FileText size={14} /> {a.contrato_url ? 'Reemplazar' : 'Subir contrato'}
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx,image/jpeg,image/png"
-                style={{ display: 'none' }}
-                disabled={subiendoId === a.id}
-                onChange={e => {
-                  const file = e.target.files?.[0]
-                  e.target.value = ''
-                  if (file) reemplazarContrato(a, file)
-                }}
-              />
-            </label>
-            <span style={{ ...styles.badge, backgroundColor: (rolColor[a.rol] || '#636e72') + '20', color: rolColor[a.rol] || '#636e72' }}>
-              {a.rol}
-            </span>
-            {esSuperadmin && a.rol !== 'superadmin' && a.id !== userProfile?.id && (
-              <button
-                style={styles.btnBorrarUser}
-                title="Eliminar usuario"
-                disabled={borrandoId === a.id}
-                onClick={() => eliminarAbogado(a)}
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
-          </div>
-        </div>
         )
       })}
+
+      {abogados.length === 0 && (
+        <p style={{ color: '#b2bec3', fontSize: '14px', textAlign: 'center', padding: '24px 0' }}>
+          Aún no hay miembros en el equipo
+        </p>
+      )}
+
+      {informeAbogado && (
+        <InformeAbogado
+          abogado={informeAbogado}
+          generadoPor={userProfile}
+          onClose={() => setInformeAbogado(null)}
+        />
+      )}
 
       {vistaContrato && (
         <div style={styles.overlay} onClick={cerrarVistaContrato}>
@@ -743,10 +816,11 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
                 <option value="abogado">Abogado</option>
                 <option value="socio">Socio</option>
                 <option value="asistente">Asistente</option>
+                <option value="contador">Contador</option>
                 {esSuperadmin && <option value="admin">Admin (despacho)</option>}
               </select>
 
-              {(nuevo.rol === 'abogado' || nuevo.rol === 'socio') && (
+              {['abogado', 'socio', 'contador'].includes(nuevo.rol) && (
                 <div style={{
                   border: '1px dashed #dfe6e9',
                   borderRadius: '10px',
@@ -1088,6 +1162,31 @@ const styles = {
   userRow: {
     display: 'flex', alignItems: 'center', gap: '16px',
     padding: '14px 0', borderBottom: '1px solid #f0f2f5',
+  },
+  equipoGrupo: {
+    marginBottom: '22px',
+  },
+  equipoGrupoHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '4px',
+    paddingBottom: '8px',
+    borderBottom: '1px solid #eef0f3',
+  },
+  equipoGrupoTitulo: {
+    fontSize: '13px',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
+  equipoGrupoCount: {
+    fontSize: '12px',
+    fontWeight: '700',
+    color: '#8b949e',
+    background: '#f0f2f5',
+    borderRadius: '999px',
+    padding: '2px 8px',
   },
   userAvatar: {
     width: '40px', height: '40px', borderRadius: '50%',

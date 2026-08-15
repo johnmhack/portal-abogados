@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const ALLOWED_ROLES = ['abogado', 'socio', 'asistente', 'cliente', 'admin', 'superadmin']
+const ALLOWED_ROLES = ['abogado', 'socio', 'asistente', 'contador', 'cliente', 'admin', 'superadmin']
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
