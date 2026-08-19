@@ -645,91 +645,99 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
     return (
       <div key={a.id} style={{ ...styles.userRow, opacity: estaActivo ? 1 : 0.72 }}>
         <div style={styles.userAvatar}>{a.nombre?.[0]}{a.apellido?.[0]}</div>
-        <div style={{ flex: 1 }}>
-          <p style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a2e', margin: 0 }}>{a.nombre} {a.apellido}</p>
-          <p style={{ fontSize: '13px', color: '#b2bec3', margin: '4px 0 0' }}>{a.email}</p>
+        <div style={styles.userInfo}>
+          <div style={styles.userInfoTop}>
+            <p style={styles.userNombre}>{a.nombre} {a.apellido}</p>
+            <span style={{ ...styles.badge, backgroundColor: (rolColor[a.rol] || '#636e72') + '20', color: rolColor[a.rol] || '#636e72' }}>
+              {a.rol}
+            </span>
+          </div>
+          <p style={styles.userEmail}>{a.email}</p>
           {a.contrato_url ? (
-            <p style={{ fontSize: '12px', color: '#00b894', margin: '4px 0 0' }}>
-              Contrato: {a.contrato_nombre || 'Adjunto'}
-            </p>
+            <p style={styles.userContratoOk}>Contrato: {a.contrato_nombre || 'Adjunto'}</p>
           ) : (
-            <p style={{ fontSize: '12px', color: '#d63031', margin: '4px 0 0' }}>Sin contrato SAR</p>
+            <p style={styles.userContratoNo}>Sin contrato SAR</p>
           )}
           {!estaActivo && (
-            <p style={{ fontSize: '12px', color: '#d63031', margin: '4px 0 0', fontWeight: 600 }}>Acceso desactivado</p>
+            <p style={styles.userInactivo}>Acceso desactivado</p>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {['abogado', 'socio', 'contador'].includes(a.rol) && (
-            <button
-              style={styles.btnAcceso}
-              title="Generar informe de gestión"
-              onClick={() => setInformeAbogado(a)}
-            >
-              <ClipboardList size={14} /> Informe
-            </button>
-          )}
-          {puedeToggleAcceso(a) && (
-            <label style={styles.toggleWrap} title={estaActivo ? 'Desactivar acceso' : 'Activar acceso'}>
-              <span style={{ ...styles.toggleLabel, color: estaActivo ? '#00b894' : '#b2bec3' }}>
-                {estaActivo ? 'Activo' : 'Inactivo'}
-              </span>
+
+        <div style={styles.userActions}>
+          <div style={styles.actionRow}>
+            {['abogado', 'socio', 'contador'].includes(a.rol) && (
               <button
-                type="button"
-                role="switch"
-                aria-checked={estaActivo}
-                disabled={togglingId === a.id}
-                onClick={() => toggleActivo(a)}
-                style={{
-                  ...styles.toggleTrack,
-                  backgroundColor: estaActivo ? '#00b894' : '#dfe6e9',
-                  opacity: togglingId === a.id ? 0.6 : 1,
-                }}
+                style={styles.btnAcceso}
+                title="Generar informe de gestión"
+                onClick={() => setInformeAbogado(a)}
               >
-                <span style={{
-                  ...styles.toggleThumb,
-                  transform: estaActivo ? 'translateX(18px)' : 'translateX(2px)',
-                }} />
+                <ClipboardList size={14} /> Informe
               </button>
+            )}
+            {a.contrato_url && (
+              <>
+                <button style={styles.btnAcceso} onClick={() => verContrato(a)} title="Ver contrato">
+                  <Eye size={14} /> Ver
+                </button>
+                <button style={styles.btnAccesoIcon} onClick={() => descargarContrato(a)} title="Descargar contrato">
+                  <Download size={14} />
+                </button>
+              </>
+            )}
+            <label style={{ ...styles.btnAcceso, cursor: subiendoId === a.id ? 'wait' : 'pointer', opacity: subiendoId === a.id ? 0.6 : 1 }}>
+              <FileText size={14} /> {a.contrato_url ? 'Reemplazar' : 'Subir contrato'}
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,image/jpeg,image/png"
+                style={{ display: 'none' }}
+                disabled={subiendoId === a.id}
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  if (file) reemplazarContrato(a, file)
+                }}
+              />
             </label>
-          )}
-          {a.contrato_url && (
-            <>
-              <button style={styles.btnAcceso} onClick={() => verContrato(a)} title="Ver contrato">
-                <Eye size={14} /> Ver
+          </div>
+
+          <div style={styles.actionRow}>
+            {puedeToggleAcceso(a) && (
+              <div style={styles.accesoBox} title={estaActivo ? 'Desactivar acceso' : 'Activar acceso'}>
+                <span style={styles.accesoLabel}>Acceso</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={estaActivo}
+                  aria-label={estaActivo ? 'Activo' : 'Inactivo'}
+                  disabled={togglingId === a.id}
+                  onClick={() => toggleActivo(a)}
+                  style={{
+                    ...styles.toggleTrack,
+                    backgroundColor: estaActivo ? '#00b894' : '#dfe6e9',
+                    opacity: togglingId === a.id ? 0.6 : 1,
+                  }}
+                >
+                  <span style={{
+                    ...styles.toggleThumb,
+                    transform: estaActivo ? 'translateX(18px)' : 'translateX(2px)',
+                  }} />
+                </button>
+                <span style={{ ...styles.accesoEstado, color: estaActivo ? '#00b894' : '#b2bec3' }}>
+                  {estaActivo ? 'Activo' : 'Inactivo'}
+                </span>
+              </div>
+            )}
+            {esSuperadmin && a.rol !== 'superadmin' && a.id !== userProfile?.id && (
+              <button
+                style={styles.btnBorrarUser}
+                title="Eliminar usuario"
+                disabled={borrandoId === a.id}
+                onClick={() => eliminarAbogado(a)}
+              >
+                <Trash2 size={14} />
               </button>
-              <button style={styles.btnAcceso} onClick={() => descargarContrato(a)} title="Descargar contrato">
-                <Download size={14} />
-              </button>
-            </>
-          )}
-          <label style={{ ...styles.btnAcceso, cursor: subiendoId === a.id ? 'wait' : 'pointer', opacity: subiendoId === a.id ? 0.6 : 1 }}>
-            <FileText size={14} /> {a.contrato_url ? 'Reemplazar' : 'Subir contrato'}
-            <input
-              type="file"
-              accept=".pdf,.doc,.docx,image/jpeg,image/png"
-              style={{ display: 'none' }}
-              disabled={subiendoId === a.id}
-              onChange={e => {
-                const file = e.target.files?.[0]
-                e.target.value = ''
-                if (file) reemplazarContrato(a, file)
-              }}
-            />
-          </label>
-          <span style={{ ...styles.badge, backgroundColor: (rolColor[a.rol] || '#636e72') + '20', color: rolColor[a.rol] || '#636e72' }}>
-            {a.rol}
-          </span>
-          {esSuperadmin && a.rol !== 'superadmin' && a.id !== userProfile?.id && (
-            <button
-              style={styles.btnBorrarUser}
-              title="Eliminar usuario"
-              disabled={borrandoId === a.id}
-              onClick={() => eliminarAbogado(a)}
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
+            )}
+          </div>
         </div>
       </div>
     )
@@ -1166,9 +1174,28 @@ const styles = {
     fontWeight: '600', textTransform: 'capitalize', display: 'inline-block',
   },
   userRow: {
-    display: 'flex', alignItems: 'center', gap: '16px',
-    padding: '14px 0', borderBottom: '1px solid #f0f2f5',
+    display: 'flex', alignItems: 'flex-start', gap: '16px',
+    padding: '16px 0', borderBottom: '1px solid #f0f2f5',
   },
+  userInfo: { flex: 1, minWidth: 0 },
+  userInfoTop: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '4px' },
+  userNombre: { fontSize: '15px', fontWeight: '600', color: '#1a1a2e', margin: 0 },
+  userEmail: { fontSize: '13px', color: '#b2bec3', margin: '0 0 4px' },
+  userContratoOk: { fontSize: '12px', color: '#00b894', margin: 0 },
+  userContratoNo: { fontSize: '12px', color: '#d63031', margin: 0 },
+  userInactivo: { fontSize: '12px', color: '#d63031', margin: '4px 0 0', fontWeight: 600 },
+  userActions: {
+    display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px',
+    flexShrink: 0, minWidth: '220px',
+  },
+  actionRow: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' },
+  accesoBox: {
+    display: 'inline-flex', alignItems: 'center', gap: '8px',
+    padding: '5px 10px', borderRadius: '8px', backgroundColor: '#f8f9fa',
+    border: '1px solid #eef0f3',
+  },
+  accesoLabel: { fontSize: '11px', fontWeight: 700, color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.03em' },
+  accesoEstado: { fontSize: '12px', fontWeight: 700, minWidth: '52px' },
   equipoGrupo: {
     marginBottom: '22px',
   },
@@ -1210,6 +1237,11 @@ const styles = {
     padding: '6px 12px', borderRadius: '6px', cursor: 'pointer',
     fontWeight: '600', fontSize: '12px',
     display: 'inline-flex', alignItems: 'center', gap: '4px',
+  },
+  btnAccesoIcon: {
+    backgroundColor: '#f0f2f5', color: '#1a1a2e', border: '1px solid #dfe6e9',
+    padding: '6px 8px', borderRadius: '6px', cursor: 'pointer',
+    display: 'inline-flex', alignItems: 'center',
   },
   toggleWrap: {
     display: 'inline-flex', alignItems: 'center', gap: '8px',
