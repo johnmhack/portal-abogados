@@ -645,14 +645,14 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
     return (
       <div key={a.id} style={{ ...styles.userRow, opacity: estaActivo ? 1 : 0.72 }}>
         <div style={styles.userAvatar}>{a.nombre?.[0]}{a.apellido?.[0]}</div>
-        <div style={styles.userInfo}>
-          <div style={styles.userInfoTop}>
-            <p style={styles.userNombre}>{a.nombre} {a.apellido}</p>
+        <div style={styles.miembroInfo}>
+          <div style={styles.miembroInfoTop}>
+            <p style={styles.miembroNombre}>{a.nombre} {a.apellido}</p>
             <span style={{ ...styles.badge, backgroundColor: (rolColor[a.rol] || '#636e72') + '20', color: rolColor[a.rol] || '#636e72' }}>
               {a.rol}
             </span>
           </div>
-          <p style={styles.userEmail}>{a.email}</p>
+          <p style={styles.miembroEmail}>{a.email}</p>
           {a.contrato_url ? (
             <p style={styles.userContratoOk}>Contrato: {a.contrato_nombre || 'Adjunto'}</p>
           ) : (
@@ -1177,10 +1177,10 @@ const styles = {
     display: 'flex', alignItems: 'flex-start', gap: '16px',
     padding: '16px 0', borderBottom: '1px solid #f0f2f5',
   },
-  userInfo: { flex: 1, minWidth: 0 },
-  userInfoTop: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '4px' },
-  userNombre: { fontSize: '15px', fontWeight: '600', color: '#1a1a2e', margin: 0 },
-  userEmail: { fontSize: '13px', color: '#b2bec3', margin: '0 0 4px' },
+  miembroInfo: { flex: 1, minWidth: 0 },
+  miembroInfoTop: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '4px' },
+  miembroNombre: { fontSize: '15px', fontWeight: '600', color: '#1a1a2e', margin: 0 },
+  miembroEmail: { fontSize: '13px', color: '#b2bec3', margin: '0 0 4px' },
   userContratoOk: { fontSize: '12px', color: '#00b894', margin: 0 },
   userContratoNo: { fontSize: '12px', color: '#d63031', margin: 0 },
   userInactivo: { fontSize: '12px', color: '#d63031', margin: '4px 0 0', fontWeight: 600 },
