@@ -148,7 +148,7 @@ export default function Estadisticas() {
 
     const [{ data: casosData }, { data: equipo }, { count: totalClientes }, { data: auds }] = await Promise.all([
       qCasos,
-      supabase.from('users').select('id, nombre, apellido, rol').in('rol', ['abogado', 'socio']).order('nombre'),
+      supabase.from('users').select('id, nombre, apellido, rol').in('rol', ['abogado', 'socio', 'admin']).order('nombre'),
       supabase.from('clients').select('id', { count: 'exact', head: true }),
       supabase
         .from('audiencias')

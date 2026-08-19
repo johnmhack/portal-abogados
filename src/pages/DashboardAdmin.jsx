@@ -14,7 +14,7 @@ import Juzgados from './Juzgados'
 import Estadisticas from './Estadisticas'
 import NotificacionesCampana from '../components/NotificacionesCampana'
 import InformeAbogado from './InformeAbogado'
-import { veEstadisticas } from '../lib/permisos'
+import { veEstadisticas, ROLES_ASIGNABLES_CASO, etiquetaRolAsignacion } from '../lib/permisos'
 
 const STAFF_ROLES = ['abogado', 'socio', 'asistente', 'contador']
 const OPS_ROLES = [...STAFF_ROLES, 'cliente']
@@ -313,7 +313,7 @@ function AdminCasos() {
     const { data } = await supabase
       .from('users')
       .select('id, nombre, apellido, rol, activo')
-      .in('rol', STAFF_ROLES)
+      .in('rol', ROLES_ASIGNABLES_CASO)
       .eq('activo', true)
       .order('nombre')
     setAbogados(data || [])
@@ -405,7 +405,7 @@ function AdminCasos() {
                 <option value="">Sin asignar</option>
                 {abogados.map(a => (
                   <option key={a.id} value={a.id}>
-                    {a.nombre} {a.apellido || ''} ({a.rol})
+                    {a.nombre} {a.apellido || ''} ({etiquetaRolAsignacion(a.rol)})
                   </option>
                 ))}
               </select>
@@ -435,8 +435,11 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
   useEffect(() => { fetchAbogados() }, [])
 
   const fetchAbogados = async () => {
-    const roles = esSuperadmin ? [...STAFF_ROLES, 'admin'] : STAFF_ROLES
-    const { data } = await supabase.from('users').select('*').in('rol', roles).order('nombre')
+    const { data } = await supabase
+      .from('users')
+      .select('*')
+      .in('rol', [...STAFF_ROLES, 'admin'])
+      .order('nombre')
     setAbogados(data || [])
   }
 
@@ -632,16 +635,18 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
       color: '#c9a84c',
       roles: ['asistente'],
     },
-    ...(esSuperadmin ? [{
+    {
       id: 'admins',
       titulo: 'Administración',
       color: '#d63031',
       roles: ['admin'],
-    }] : []),
+    },
   ]
 
   const renderMiembro = (a) => {
     const estaActivo = a.activo !== false
+    const esAdminDespacho = a.rol === 'admin'
+    const rolEtiqueta = esAdminDespacho ? etiquetaRolAsignacion(a.rol) : a.rol
     return (
       <div key={a.id} style={{ ...styles.userRow, opacity: estaActivo ? 1 : 0.72 }}>
         <div style={styles.userAvatar}>{a.nombre?.[0]}{a.apellido?.[0]}</div>
@@ -649,11 +654,13 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
           <div style={styles.miembroInfoTop}>
             <p style={styles.miembroNombre}>{a.nombre} {a.apellido}</p>
             <span style={{ ...styles.badge, backgroundColor: (rolColor[a.rol] || '#636e72') + '20', color: rolColor[a.rol] || '#636e72' }}>
-              {a.rol}
+              {rolEtiqueta}
             </span>
           </div>
           <p style={styles.miembroEmail}>{a.email}</p>
-          {a.contrato_url ? (
+          {esAdminDespacho ? (
+            <p style={styles.userContratoOk}>Administración del despacho · puede asignarse casos</p>
+          ) : a.contrato_url ? (
             <p style={styles.userContratoOk}>Contrato: {a.contrato_nombre || 'Adjunto'}</p>
           ) : (
             <p style={styles.userContratoNo}>Sin contrato SAR</p>
@@ -665,7 +672,7 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
 
         <div style={styles.userActions}>
           <div style={styles.actionRow}>
-            {['abogado', 'socio', 'contador'].includes(a.rol) && (
+            {['abogado', 'socio', 'contador', 'admin'].includes(a.rol) && (
               <button
                 style={styles.btnAcceso}
                 title="Generar informe de gestión"
@@ -674,6 +681,8 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
                 <ClipboardList size={14} /> Informe
               </button>
             )}
+            {!esAdminDespacho && (
+              <>
             {a.contrato_url && (
               <>
                 <button style={styles.btnAcceso} onClick={() => verContrato(a)} title="Ver contrato">
@@ -698,12 +707,21 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
                 }}
               />
             </label>
-          </div>
-
-          <div style={styles.actionRow}>
+            {esSuperadmin && a.rol !== 'superadmin' && a.id !== userProfile?.id && (
+              <button
+                style={styles.btnBorrarUser}
+                title="Eliminar usuario"
+                disabled={borrandoId === a.id}
+                onClick={() => eliminarAbogado(a)}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
             {puedeToggleAcceso(a) && (
-              <div style={styles.accesoBox} title={estaActivo ? 'Desactivar acceso' : 'Activar acceso'}>
-                <span style={styles.accesoLabel}>Acceso</span>
+              <div style={styles.accesoInline} title={estaActivo ? 'Desactivar acceso' : 'Activar acceso'}>
+                <span style={{ ...styles.accesoEstado, color: estaActivo ? '#00b894' : '#b2bec3' }}>
+                  {estaActivo ? 'Activo' : 'Inactivo'}
+                </span>
                 <button
                   type="button"
                   role="switch"
@@ -722,20 +740,9 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
                     transform: estaActivo ? 'translateX(18px)' : 'translateX(2px)',
                   }} />
                 </button>
-                <span style={{ ...styles.accesoEstado, color: estaActivo ? '#00b894' : '#b2bec3' }}>
-                  {estaActivo ? 'Activo' : 'Inactivo'}
-                </span>
               </div>
             )}
-            {esSuperadmin && a.rol !== 'superadmin' && a.id !== userProfile?.id && (
-              <button
-                style={styles.btnBorrarUser}
-                title="Eliminar usuario"
-                disabled={borrandoId === a.id}
-                onClick={() => eliminarAbogado(a)}
-              >
-                <Trash2 size={14} />
-              </button>
+              </>
             )}
           </div>
         </div>
@@ -1185,17 +1192,16 @@ const styles = {
   userContratoNo: { fontSize: '12px', color: '#d63031', margin: 0 },
   userInactivo: { fontSize: '12px', color: '#d63031', margin: '4px 0 0', fontWeight: 600 },
   userActions: {
-    display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px',
-    flexShrink: 0, minWidth: '220px',
+    display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+    flexShrink: 0, maxWidth: '100%',
   },
   actionRow: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' },
-  accesoBox: {
+  accesoInline: {
     display: 'inline-flex', alignItems: 'center', gap: '8px',
-    padding: '5px 10px', borderRadius: '8px', backgroundColor: '#f8f9fa',
-    border: '1px solid #eef0f3',
+    marginLeft: '4px', paddingLeft: '10px',
+    borderLeft: '1px solid #eef0f3',
   },
-  accesoLabel: { fontSize: '11px', fontWeight: 700, color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.03em' },
-  accesoEstado: { fontSize: '12px', fontWeight: 700, minWidth: '52px' },
+  accesoEstado: { fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap' },
   equipoGrupo: {
     marginBottom: '22px',
   },

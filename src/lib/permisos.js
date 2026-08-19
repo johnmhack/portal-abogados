@@ -23,6 +23,14 @@ export function veEstadisticas(rol) {
   return ['admin', 'superadmin'].includes(rol)
 }
 
+/** Quién puede figurar como abogado a cargo en un caso (sin otro usuario/login). */
+export const ROLES_ASIGNABLES_CASO = ['abogado', 'socio', 'asistente', 'contador', 'admin']
+
+export function etiquetaRolAsignacion(rol) {
+  if (rol === 'admin') return 'Administración'
+  return rol
+}
+
 const ESTADOS_CANDADO = ['cerrado', 'ganado', 'perdido']
 
 export function casoConCandado(status) {
