@@ -599,7 +599,11 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
         }
       }
 
-      alert('Usuario creado. Contraseña inicial: Temporal123!')
+      alert(
+        data.email_sent
+          ? `Usuario creado y correo de bienvenida enviado a ${nuevo.email}.\nContraseña inicial: Temporal123!`
+          : `Usuario creado. Contraseña inicial: Temporal123!\nEl correo no se envió${data.email_error ? `: ${data.email_error}` : ''}.`
+      )
       setModalOpen(false)
       setNuevo({ nombre: '', apellido: '', email: '', telefono: '', rol: 'abogado' })
       setContratoFile(null)
@@ -883,18 +887,34 @@ function AdminAbogados({ esSuperadmin, esAsistente = false, userProfile }) {
 
 function AdminClientes() {
   const [clientes, setClientes] = useState([])
+  const [clientesConAcceso, setClientesConAcceso] = useState(new Set())
+  const [creandoId, setCreandoId] = useState(null)
   const [busqueda, setBusqueda] = useState('')
 
-  useEffect(() => { fetchClientes() }, [])
+  useEffect(() => {
+    fetchClientes()
+    fetchClientesConAcceso()
+  }, [])
 
   const fetchClientes = async () => {
     const { data } = await supabase.from('clients').select('*').order('nombre')
     setClientes(data || [])
   }
 
+  const fetchClientesConAcceso = async () => {
+    const { data } = await supabase
+      .from('users')
+      .select('client_id')
+      .eq('rol', 'cliente')
+      .not('client_id', 'is', null)
+    const ids = new Set((data || []).map(u => u.client_id))
+    setClientesConAcceso(ids)
+  }
+
   const crearAccesoCliente = async (cliente) => {
     if (!cliente.correo) { alert('El cliente no tiene correo registrado.'); return }
     if (!window.confirm(`¿Crear acceso para ${cliente.nombre} ${cliente.apellido || ''}?`)) return
+    setCreandoId(cliente.id)
     try {
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
@@ -916,9 +936,16 @@ function AdminClientes() {
         alert(data.error?.includes('already') ? 'Este cliente ya tiene acceso.' : 'Error: ' + data.error)
         return
       }
-      alert(`Acceso creado!\n\nCorreo: ${cliente.correo}\nContraseña: Temporal123!`)
+      alert(
+        data.email_sent
+          ? `Acceso creado y correo de bienvenida enviado a ${cliente.correo}.\n\nContraseña: Temporal123!`
+          : `Acceso creado.\n\nCorreo: ${cliente.correo}\nContraseña: Temporal123!\n\nEl correo no se envió${data.email_error ? `: ${data.email_error}` : ''}.`
+      )
+      setClientesConAcceso(prev => new Set([...prev, cliente.id]))
     } catch (e) {
       alert('Error: ' + e.message)
+    } finally {
+      setCreandoId(null)
     }
   }
 
@@ -941,23 +968,37 @@ function AdminClientes() {
         value={busqueda}
         onChange={e => setBusqueda(e.target.value)}
       />
-      {clientesFiltrados.map(c => (
-        <div key={c.id} style={styles.userRow}>
-          <div style={styles.userAvatar}>{c.nombre?.[0]}{c.apellido?.[0]}</div>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a2e', margin: 0 }}>{c.nombre} {c.apellido}</p>
-            <p style={{ fontSize: '13px', color: '#b2bec3', margin: '4px 0 0' }}>
-              {c.documento ? `Doc: ${c.documento} · ` : ''}{c.correo || 'Sin correo'}{c.telefono ? ` · ${c.telefono}` : ''}
-            </p>
+      {clientesFiltrados.map(c => {
+        const tieneAcceso = clientesConAcceso.has(c.id)
+        const creando = creandoId === c.id
+        return (
+          <div key={c.id} style={styles.userRow}>
+            <div style={styles.userAvatar}>{c.nombre?.[0]}{c.apellido?.[0]}</div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a2e', margin: 0 }}>{c.nombre} {c.apellido}</p>
+              <p style={{ fontSize: '13px', color: '#b2bec3', margin: '4px 0 0' }}>
+                {c.documento ? `Doc: ${c.documento} · ` : ''}{c.correo || 'Sin correo'}{c.telefono ? ` · ${c.telefono}` : ''}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <span style={{ ...styles.badge, backgroundColor: '#f0f2f5', color: '#636e72' }}>{c.tipo_persona || '—'}</span>
+              {tieneAcceso ? (
+                <span style={{ ...styles.badge, backgroundColor: '#00b89418', color: '#00b894', fontSize: '12px', padding: '4px 10px' }}>
+                  ✓ Con acceso
+                </span>
+              ) : (
+                <button
+                  style={{ ...styles.btnAcceso, opacity: creando ? 0.6 : 1 }}
+                  disabled={creando}
+                  onClick={() => crearAccesoCliente(c)}
+                >
+                  {creando ? 'Creando...' : 'Crear acceso'}
+                </button>
+              )}
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{ ...styles.badge, backgroundColor: '#f0f2f5', color: '#636e72' }}>{c.tipo_persona || '—'}</span>
-            <button style={styles.btnAcceso} onClick={() => crearAccesoCliente(c)}>
-              Crear acceso
-            </button>
-          </div>
-        </div>
-      ))}
+        )
+      })}
       {clientesFiltrados.length === 0 && <div style={styles.emptyRow}>No hay clientes</div>}
     </div>
   )

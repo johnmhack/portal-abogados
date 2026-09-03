@@ -165,7 +165,11 @@ export default function Clientes({ userProfile }) {
       if (data.error) {
         alert('Cliente creado pero error al crear acceso: ' + data.error)
       } else {
-        alert(`✅ Cliente creado con acceso al portal!\n\nCorreo: ${clienteCreado.correo}\nContraseña: Temporal123!`)
+        alert(
+          data.email_sent
+            ? `Cliente creado. Correo de bienvenida enviado a ${clienteCreado.correo}.\nContraseña: Temporal123!`
+            : `Cliente creado con acceso.\n\nCorreo: ${clienteCreado.correo}\nContraseña: Temporal123!\n\nEl correo no se envió.`
+        )
       }
     } catch (e) {
       alert('Cliente creado pero error: ' + e.message)
