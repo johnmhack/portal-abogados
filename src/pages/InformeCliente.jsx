@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
 import { CheckCircle, Download, Calendar } from 'lucide-react'
+import html2pdf from 'html2pdf.js'
 
 const statusLabel = {
   activo: 'Activo',
@@ -22,6 +23,7 @@ export default function InformeCliente({ casoId, onClose }) {
   const [actuaciones, setActuaciones] = useState([])
   const [proximaAudiencia, setProximaAudiencia] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [generandoPdf, setGenerandoPdf] = useState(false)
 
   const fetchDatos = async () => {
     setLoading(true)
@@ -121,9 +123,83 @@ export default function InformeCliente({ casoId, onClose }) {
     ? `${caso.juzgados.nombre}${caso.juzgados.ciudad ? ` (${caso.juzgados.ciudad})` : ''}`
     : null
 
+  const descargarPdf = async () => {
+    const fuente = document.getElementById('informe-cliente-contenido')
+    if (!fuente || generandoPdf) return
+
+    setGenerandoPdf(true)
+    try {
+      const clone = fuente.cloneNode(true)
+      clone.querySelectorAll('.no-print, .pdf-omit').forEach((el) => el.remove())
+      clone.querySelectorAll('.print-only').forEach((el) => {
+        el.style.display = 'block'
+      })
+      clone.style.maxHeight = 'none'
+      clone.style.overflow = 'visible'
+      clone.style.boxShadow = 'none'
+      clone.style.borderRadius = '0'
+      clone.style.width = '720px'
+      clone.style.padding = '28px'
+      clone.style.background = '#fff'
+      clone.style.margin = '0'
+
+      const wrap = document.createElement('div')
+      wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:720px;background:#fff;z-index:-1;'
+      wrap.appendChild(clone)
+      document.body.appendChild(wrap)
+
+      const clienteNombre = cliente
+        ? `${cliente.nombre || ''} ${cliente.apellido || ''}`.trim()
+        : 'Cliente'
+      const archivo = `Informe_${clienteNombre.replace(/[^\wáéíóúñÁÉÍÓÚÑ\s-]/gi, '').trim().replace(/\s+/g, '_') || 'cliente'}.pdf`
+
+      const fechaGen = new Date().toLocaleString('es-CO')
+      const pie1 = `Informe generado el ${fechaGen} — SAR Consultores Integrales`
+      const pie2 = 'Documento confidencial. Uso exclusivo del cliente y del despacho.'
+
+      const worker = html2pdf()
+        .set({
+          margin: [12, 12, 22, 12],
+          filename: archivo,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy'], avoid: ['.timeline-item-print', '.bloque-print', '.act-row-print', '.aud-box-print'] },
+        })
+        .from(clone)
+
+      const pdf = await worker.toPdf().get('pdf')
+      const total = pdf.internal.getNumberOfPages()
+      const pageW = pdf.internal.pageSize.getWidth()
+      const pageH = pdf.internal.pageSize.getHeight()
+
+      for (let i = 1; i <= total; i++) {
+        pdf.setPage(i)
+        pdf.setDrawColor(210, 210, 210)
+        pdf.setLineWidth(0.25)
+        pdf.line(12, pageH - 16, pageW - 12, pageH - 16)
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(7.5)
+        pdf.setTextColor(99, 110, 114)
+        pdf.text(pie1, pageW / 2, pageH - 11, { align: 'center' })
+        pdf.text(pie2, pageW / 2, pageH - 6.5, { align: 'center' })
+        pdf.setFontSize(7)
+        pdf.setTextColor(150, 150, 150)
+        pdf.text(`${i} / ${total}`, pageW - 12, pageH - 6.5, { align: 'right' })
+      }
+
+      await worker.save()
+      document.body.removeChild(wrap)
+    } catch (e) {
+      alert('No se pudo generar el PDF: ' + (e.message || e))
+    } finally {
+      setGenerandoPdf(false)
+    }
+  }
+
   return (
     <div style={styles.overlay}>
-      <div style={styles.modal} className="informe-cliente-print">
+      <div style={styles.modal} className="informe-cliente-print" id="informe-cliente-contenido">
         <div style={styles.header} className="no-print">
           <div>
             <h2 style={styles.titulo}>SAR Consultores Integrales</h2>
@@ -131,22 +207,24 @@ export default function InformeCliente({ casoId, onClose }) {
           </div>
           <div style={styles.headerBtns}>
             <button
-              style={styles.btnImprimir}
-              onClick={() => window.print()}
-              title="Abre el diálogo de impresión. Elige «Guardar como PDF» para descargar."
+              style={{ ...styles.btnImprimir, opacity: generandoPdf ? 0.7 : 1 }}
+              onClick={descargarPdf}
+              disabled={generandoPdf}
+              title="Descarga el informe en PDF sin encabezados del navegador."
             >
-              <Download size={16} /> Imprimir / PDF
+              <Download size={16} /> {generandoPdf ? 'Generando PDF...' : 'Descargar PDF'}
             </button>
             <button style={styles.btnCerrar} onClick={onClose}>✕</button>
           </div>
         </div>
 
         <div style={styles.printHeader} className="print-only">
-          <h2 style={styles.titulo}>SAR Consultores Integrales</h2>
-          <p style={styles.subtitulo}>Informe de avance del proceso</p>
+          <p style={styles.printBrand}>SAR Consultores Integrales</p>
+          <h2 style={styles.titulo}>Informe de avance del proceso</h2>
+          <p style={styles.subtitulo}>Documento confidencial para el cliente</p>
         </div>
 
-        <div style={styles.infoCaso}>
+        <div style={styles.infoCaso} className="bloque-print">
           <div style={styles.infoGrid}>
             <div>
               <p style={styles.infoLabel}>Cliente</p>
@@ -193,7 +271,7 @@ export default function InformeCliente({ casoId, onClose }) {
           </div>
         </div>
 
-        <div style={styles.situacionBox}>
+        <div style={styles.situacionBox} className="bloque-print">
           <p style={styles.situacionLabel}>Situación actual</p>
           <p style={styles.situacionTexto}>{resumen.situacion}</p>
           {resumen.enCurso && !['cerrado', 'ganado', 'perdido'].includes(caso.status) && (
@@ -203,7 +281,7 @@ export default function InformeCliente({ casoId, onClose }) {
           )}
         </div>
 
-        <div style={styles.progresoBox}>
+        <div style={styles.progresoBox} className="bloque-print">
           <div style={styles.progresoHeader}>
             <span style={styles.progresoLabel}>Avance del proceso</span>
             <span style={styles.progresoNum}>{resumen.progreso}%</span>
@@ -228,7 +306,7 @@ export default function InformeCliente({ casoId, onClose }) {
         ) : (
           <div style={styles.timeline}>
             {resumen.completadas.map((etapa) => (
-              <div key={etapa.id} style={styles.timelineItem}>
+              <div key={etapa.id} style={styles.timelineItem} className="timeline-item-print">
                 <div style={styles.timelineIcon}>
                   <CheckCircle size={18} color="#00b894" />
                 </div>
@@ -246,7 +324,7 @@ export default function InformeCliente({ casoId, onClose }) {
               </div>
             ))}
             {resumen.enCurso && (
-              <div style={styles.timelineItem}>
+              <div style={styles.timelineItem} className="timeline-item-print">
                 <div style={{ ...styles.timelineIcon, backgroundColor: '#c9a84c18' }}>
                   <div style={styles.puntoActual} />
                 </div>
@@ -267,7 +345,7 @@ export default function InformeCliente({ casoId, onClose }) {
             <h3 style={styles.sectionTitle}>Actuaciones recientes</h3>
             <div style={styles.actList}>
               {actuaciones.map((a) => (
-                <div key={a.id} style={styles.actRow}>
+                <div key={a.id} style={styles.actRow} className="act-row-print">
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={styles.actDesc}>{a.descripcion}</p>
                     {a.tipo && a.tipo !== 'otro' && (
@@ -286,7 +364,7 @@ export default function InformeCliente({ casoId, onClose }) {
         {proximaAudiencia && (
           <>
             <h3 style={styles.sectionTitle}>Próxima audiencia</h3>
-            <div style={styles.audBox}>
+            <div style={styles.audBox} className="aud-box-print">
               <Calendar size={18} color="#6c5ce7" />
               <div style={{ flex: 1 }}>
                 <p style={styles.audTitulo}>{proximaAudiencia.titulo}</p>
@@ -302,7 +380,7 @@ export default function InformeCliente({ casoId, onClose }) {
           </>
         )}
 
-        <div style={styles.footer}>
+        <div style={styles.footer} className="pdf-omit">
           <p>Informe generado el {new Date().toLocaleString('es-CO')} — SAR Consultores Integrales</p>
           <p>Documento confidencial. Uso exclusivo del cliente y del despacho.</p>
         </div>
@@ -310,26 +388,6 @@ export default function InformeCliente({ casoId, onClose }) {
 
       <style>{`
         .print-only { display: none; }
-        @media print {
-          @page { margin: 12mm; size: A4; }
-          body * { visibility: hidden !important; }
-          .informe-cliente-print, .informe-cliente-print * { visibility: visible !important; }
-          .informe-cliente-print {
-            position: absolute !important;
-            left: 0; top: 0; width: 100%;
-            max-height: none !important;
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            padding: 12px !important;
-            overflow: visible !important;
-          }
-          .no-print { display: none !important; }
-          .print-only { display: block !important; }
-          .informe-cliente-print * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-        }
       `}</style>
     </div>
   )
@@ -355,6 +413,14 @@ const styles = {
   },
   printHeader: {
     marginBottom: '20px', paddingBottom: '14px', borderBottom: '2px solid #1a1a2e',
+  },
+  printBrand: {
+    margin: '0 0 6px',
+    fontSize: '11px',
+    fontWeight: 700,
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase',
+    color: '#c9a84c',
   },
   titulo: { fontSize: '20px', fontWeight: 700, color: '#1a1a2e', margin: 0 },
   subtitulo: { fontSize: '13px', color: '#636e72', marginTop: '4px' },
