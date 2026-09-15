@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
 import { CheckCircle, Download, Calendar } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
+import { CONTACTO_DESPACHO, lineaContactoDespacho } from '../lib/contactoDespacho'
 
 const statusLabel = {
   activo: 'Activo',
@@ -154,12 +155,13 @@ export default function InformeCliente({ casoId, onClose }) {
       const archivo = `Informe_${clienteNombre.replace(/[^\wáéíóúñÁÉÍÓÚÑ\s-]/gi, '').trim().replace(/\s+/g, '_') || 'cliente'}.pdf`
 
       const fechaGen = new Date().toLocaleString('es-CO')
-      const pie1 = `Informe generado el ${fechaGen} — SAR Consultores Integrales`
+      const pie1 = `Informe generado el ${fechaGen} — ${CONTACTO_DESPACHO.nombre}`
       const pie2 = 'Documento confidencial. Uso exclusivo del cliente y del despacho.'
+      const pie3 = lineaContactoDespacho()
 
       const worker = html2pdf()
         .set({
-          margin: [12, 12, 22, 12],
+          margin: [12, 12, 26, 12],
           filename: archivo,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
@@ -177,15 +179,17 @@ export default function InformeCliente({ casoId, onClose }) {
         pdf.setPage(i)
         pdf.setDrawColor(210, 210, 210)
         pdf.setLineWidth(0.25)
-        pdf.line(12, pageH - 16, pageW - 12, pageH - 16)
+        pdf.line(12, pageH - 20, pageW - 12, pageH - 20)
         pdf.setFont('helvetica', 'normal')
         pdf.setFontSize(7.5)
         pdf.setTextColor(99, 110, 114)
-        pdf.text(pie1, pageW / 2, pageH - 11, { align: 'center' })
-        pdf.text(pie2, pageW / 2, pageH - 6.5, { align: 'center' })
+        pdf.text(pie1, pageW / 2, pageH - 15, { align: 'center' })
+        pdf.text(pie2, pageW / 2, pageH - 10.5, { align: 'center' })
         pdf.setFontSize(7)
+        pdf.setTextColor(26, 26, 46)
+        pdf.text(pie3, pageW / 2, pageH - 6, { align: 'center' })
         pdf.setTextColor(150, 150, 150)
-        pdf.text(`${i} / ${total}`, pageW - 12, pageH - 6.5, { align: 'right' })
+        pdf.text(`${i} / ${total}`, pageW - 12, pageH - 6, { align: 'right' })
       }
 
       await worker.save()
@@ -270,6 +274,13 @@ export default function InformeCliente({ casoId, onClose }) {
             )}
           </div>
         </div>
+
+        {caso.descripcion?.trim() && (
+          <div style={styles.descBox} className="bloque-print">
+            <p style={styles.descLabel}>Descripción del caso</p>
+            <p style={styles.descTexto}>{caso.descripcion.trim()}</p>
+          </div>
+        )}
 
         <div style={styles.situacionBox} className="bloque-print">
           <p style={styles.situacionLabel}>Situación actual</p>
@@ -381,8 +392,17 @@ export default function InformeCliente({ casoId, onClose }) {
         )}
 
         <div style={styles.footer} className="pdf-omit">
-          <p>Informe generado el {new Date().toLocaleString('es-CO')} — SAR Consultores Integrales</p>
+          <p>Informe generado el {new Date().toLocaleString('es-CO')} — {CONTACTO_DESPACHO.nombre}</p>
           <p>Documento confidencial. Uso exclusivo del cliente y del despacho.</p>
+          <p style={styles.footerContacto}>
+            <a href={CONTACTO_DESPACHO.telefonoHref} style={styles.footerLink}>{CONTACTO_DESPACHO.telefono}</a>
+            {' · '}
+            <a href={CONTACTO_DESPACHO.emailHref} style={styles.footerLink}>{CONTACTO_DESPACHO.email}</a>
+            {' · '}
+            <a href={CONTACTO_DESPACHO.webHref} style={styles.footerLink} target="_blank" rel="noreferrer">
+              {CONTACTO_DESPACHO.web}
+            </a>
+          </p>
         </div>
       </div>
 
@@ -437,6 +457,22 @@ const styles = {
   infoGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px' },
   infoLabel: { fontSize: '11px', color: '#8a94a6', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.03em' },
   infoValor: { fontSize: '14px', fontWeight: 600, color: '#1a1a2e', margin: 0 },
+
+  descBox: {
+    backgroundColor: '#fff',
+    border: '1px solid #e8ecf0',
+    borderRadius: '10px',
+    padding: '16px 18px',
+    marginBottom: '18px',
+  },
+  descLabel: {
+    fontSize: '11px', color: '#8a94a6', textTransform: 'uppercase',
+    letterSpacing: '0.05em', fontWeight: 700, margin: '0 0 8px',
+  },
+  descTexto: {
+    fontSize: '14px', color: '#2d3436', margin: 0, lineHeight: 1.55,
+    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+  },
 
   situacionBox: {
     backgroundColor: '#1a1a2e', borderRadius: '10px', padding: '18px 20px', marginBottom: '18px',
@@ -496,5 +532,15 @@ const styles = {
   footer: {
     marginTop: '28px', paddingTop: '16px', borderTop: '1px solid #f0f2f5',
     fontSize: '11px', color: '#b2bec3', textAlign: 'center', lineHeight: 1.6,
+  },
+  footerContacto: {
+    margin: '8px 0 0',
+    fontSize: '12px',
+    color: '#636e72',
+    fontWeight: 500,
+  },
+  footerLink: {
+    color: '#1a1a2e',
+    textDecoration: 'none',
   },
 }
