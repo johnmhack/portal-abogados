@@ -455,12 +455,14 @@ function EventosTab({ casoId, puedeEditar = true }) {
 function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
   const [etapas, setEtapas] = useState([])
   const [docsPorEtapa, setDocsPorEtapa] = useState({})
+  const [docsPorTarea, setDocsPorTarea] = useState({})
   const [tareasPorEtapa, setTareasPorEtapa] = useState({})
   const [expandida, setExpandida] = useState(null)
   const [modalNueva, setModalNueva] = useState(false)
   const [nueva, setNueva] = useState({ nombre: '', notas: '' })
   const [nuevaTarea, setNuevaTarea] = useState({})
   const [subiendoStage, setSubiendoStage] = useState(null)
+  const [subiendoTarea, setSubiendoTarea] = useState(null)
   const [vistaDoc, setVistaDoc] = useState(null)
 
   useEffect(() => { fetchTodo() }, [casoId])
@@ -478,13 +480,19 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
       .from('documents')
       .select('*')
       .eq('case_id', casoId)
-      .not('stage_id', 'is', null)
-    const docsMap = {}
+    const docsEtapaMap = {}
+    const docsTareaMap = {}
     ;(docs || []).forEach(d => {
-      if (!docsMap[d.stage_id]) docsMap[d.stage_id] = []
-      docsMap[d.stage_id].push(d)
+      if (d.task_id) {
+        if (!docsTareaMap[d.task_id]) docsTareaMap[d.task_id] = []
+        docsTareaMap[d.task_id].push(d)
+      } else if (d.stage_id) {
+        if (!docsEtapaMap[d.stage_id]) docsEtapaMap[d.stage_id] = []
+        docsEtapaMap[d.stage_id].push(d)
+      }
     })
-    setDocsPorEtapa(docsMap)
+    setDocsPorEtapa(docsEtapaMap)
+    setDocsPorTarea(docsTareaMap)
 
     const { data: tareas } = await supabase
       .from('tasks')
@@ -547,6 +555,33 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
     e.target.value = ''
   }
 
+  const subirDocTarea = async (taskId, stageId, e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSubiendoTarea(taskId)
+    const path = `${casoId}/tareas/${taskId}/${Date.now()}_${file.name}`
+    const { error: uploadError } = await supabase.storage.from('documentos').upload(path, file)
+    if (!uploadError) {
+      const { error: dbError } = await supabase.from('documents').insert([{
+        case_id: casoId,
+        stage_id: stageId || null,
+        task_id: taskId,
+        nombre: file.name,
+        tipo_documento: file.type,
+        url: path
+      }])
+      if (dbError) {
+        alert('Ejecuta en Supabase el SQL documents_task_id.sql.\n' + dbError.message)
+      } else {
+        await fetchTodo()
+      }
+    } else {
+      alert('Error al subir: ' + uploadError.message)
+    }
+    setSubiendoTarea(null)
+    e.target.value = ''
+  }
+
   const eliminarDocEtapa = async (doc) => {
     if (vistaDoc?.id === doc.id) {
       if (vistaDoc.url) URL.revokeObjectURL(vistaDoc.url)
@@ -589,6 +624,11 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
   }
 
   const eliminarTareaEtapa = async (id) => {
+    const docs = docsPorTarea[id] || []
+    if (docs.length > 0) {
+      await supabase.storage.from('documentos').remove(docs.map(d => d.url))
+      await supabase.from('documents').delete().in('id', docs.map(d => d.id))
+    }
     await supabase.from('tasks').delete().eq('id', id)
     fetchTodo()
   }
@@ -623,6 +663,7 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
           const abierta = expandida === etapa.id
           const docs = docsPorEtapa[etapa.id] || []
           const tareas = tareasPorEtapa[etapa.id] || []
+          const docsTareasCount = tareas.reduce((n, t) => n + (docsPorTarea[t.id]?.length || 0), 0)
           return (
             <div key={etapa.id} style={styles.etapaCard}>
               <div style={{ ...styles.etapaCirculo, borderColor: estadoColor[etapa.estado] }}>
@@ -636,7 +677,7 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
                   >
                     <span style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a2e' }}>{etapa.nombre}</span>
                     <span style={{ fontSize: '11px', color: '#b2bec3' }}>
-                      {docs.length} docs · {tareas.length} tareas {abierta ? '▲' : '▼'}
+                      {docs.length + docsTareasCount} docs · {tareas.length} tareas {abierta ? '▲' : '▼'}
                     </span>
                   </button>
                   <select
@@ -682,7 +723,7 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
                       }}
                     />
 
-                    <label style={styles.etapaLabel}>Documentos</label>
+                    <label style={styles.etapaLabel}>Documentos de la etapa</label>
                     {docs.map(doc => (
                       <div key={doc.id} style={styles.etapaDocRow}>
                         <span style={{ fontSize: '13px', color: '#2d3436', flex: 1 }}>📄 {doc.nombre}</span>
@@ -697,7 +738,7 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
                       </div>
                     ))}
 
-                    {vistaDoc && vistaDoc.stage_id === etapa.id && (
+                    {vistaDoc && !vistaDoc.task_id && vistaDoc.stage_id === etapa.id && (
                       <div style={styles.viewerBox}>
                         <div style={styles.viewerHeader}>
                           <span style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a2e' }}>{vistaDoc.nombre}</span>
@@ -717,7 +758,7 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
 
                     {puedeEditar && (
                       <label style={styles.btnSubirMini}>
-                        {subiendoStage === etapa.id ? 'Subiendo...' : '+ Subir documento'}
+                        {subiendoStage === etapa.id ? 'Subiendo...' : '+ Subir documento a la etapa'}
                         <input
                           type="file"
                           style={{ display: 'none' }}
@@ -728,28 +769,83 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
                     )}
 
                     <label style={styles.etapaLabel}>Tareas</label>
-                    {tareas.map(t => (
-                      <div key={t.id} style={{ ...styles.tareaCard, marginBottom: '6px', padding: '8px 12px' }}>
-                        <input
-                          type="checkbox"
-                          checked={!!t.completado}
-                          onChange={() => puedeEditar && toggleTareaEtapa(t.id, t.completado)}
-                          disabled={!puedeEditar}
-                          style={{ cursor: puedeEditar ? 'pointer' : 'default', width: '16px', height: '16px' }}
-                        />
-                        <span style={{
-                          fontSize: '13px',
-                          color: '#2d3436',
-                          textDecoration: t.completado ? 'line-through' : 'none',
-                          flex: 1
-                        }}>{t.titulo}</span>
-                        {puedeBorrar && (
-                        <button style={styles.btnTareaEliminar} onClick={() => eliminarTareaEtapa(t.id)}>
-                          <X size={14} />
-                        </button>
-                        )}
-                      </div>
-                    ))}
+                    {tareas.map(t => {
+                      const docsTarea = docsPorTarea[t.id] || []
+                      return (
+                        <div key={t.id} style={styles.tareaBloque}>
+                          <div style={{ ...styles.tareaCard, marginBottom: 0, padding: '8px 12px', border: 'none', backgroundColor: 'transparent' }}>
+                            <input
+                              type="checkbox"
+                              checked={!!t.completado}
+                              onChange={() => puedeEditar && toggleTareaEtapa(t.id, t.completado)}
+                              disabled={!puedeEditar}
+                              style={{ cursor: puedeEditar ? 'pointer' : 'default', width: '16px', height: '16px' }}
+                            />
+                            <span style={{
+                              fontSize: '13px',
+                              color: '#2d3436',
+                              textDecoration: t.completado ? 'line-through' : 'none',
+                              flex: 1
+                            }}>{t.titulo}</span>
+                            {puedeBorrar && (
+                              <button style={styles.btnTareaEliminar} onClick={() => eliminarTareaEtapa(t.id)}>
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+
+                          {docsTarea.length > 0 && (
+                            <div style={styles.tareaDocsBox}>
+                              {docsTarea.map(doc => (
+                                <div key={doc.id} style={styles.etapaDocRow}>
+                                  <span style={{ fontSize: '12px', color: '#2d3436', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    📄 {doc.nombre}
+                                  </span>
+                                  <button style={styles.btnVer} onClick={() => visualizarDocEtapa(doc)} title="Ver">
+                                    <Eye size={14} /> Ver
+                                  </button>
+                                  {puedeBorrar && (
+                                    <button style={styles.btnTareaEliminar} onClick={() => eliminarDocEtapa(doc)} title="Eliminar">
+                                      <X size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {vistaDoc?.task_id === t.id && (
+                            <div style={styles.viewerBox}>
+                              <div style={styles.viewerHeader}>
+                                <span style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a2e' }}>{vistaDoc.nombre}</span>
+                                <button style={styles.closeBtn} onClick={cerrarVistaDoc}><X size={16} /></button>
+                              </div>
+                              {esImagen(vistaDoc.tipo_documento) ? (
+                                <img src={vistaDoc.url} alt={vistaDoc.nombre} style={styles.viewerImg} />
+                              ) : esPdf(vistaDoc.tipo_documento, vistaDoc.nombre) ? (
+                                <iframe src={vistaDoc.url} title={vistaDoc.nombre} style={{ ...styles.viewerFrame, height: '50vh' }} />
+                              ) : (
+                                <div style={styles.viewerFallback}>
+                                  <p style={{ color: '#636e72', fontSize: '13px' }}>Vista previa no disponible para este tipo de archivo.</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {puedeEditar && (
+                            <label style={{ ...styles.btnSubirMini, marginTop: '4px', fontSize: '11px', padding: '6px 10px' }}>
+                              {subiendoTarea === t.id ? 'Subiendo...' : '+ Documento a esta tarea'}
+                              <input
+                                type="file"
+                                style={{ display: 'none' }}
+                                disabled={subiendoTarea === t.id}
+                                onChange={e => subirDocTarea(t.id, etapa.id, e)}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      )
+                    })}
                     {puedeEditar && (
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <input
@@ -794,17 +890,34 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
 // ── TAREAS ──
 function TareasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
   const [tareas, setTareas] = useState([])
+  const [docsPorTarea, setDocsPorTarea] = useState({})
   const [nueva, setNueva] = useState('')
+  const [subiendoTarea, setSubiendoTarea] = useState(null)
+  const [vistaDoc, setVistaDoc] = useState(null)
 
   useEffect(() => { fetchTareas() }, [casoId])
+  useEffect(() => () => { if (vistaDoc?.url) URL.revokeObjectURL(vistaDoc.url) }, [vistaDoc])
 
   const fetchTareas = async () => {
-    const { data } = await supabase
-      .from('tasks')
-      .select('*, case_stages(nombre)')
-      .eq('case_id', casoId)
-      .order('creado_en', { ascending: false })
+    const [{ data }, { data: docs }] = await Promise.all([
+      supabase
+        .from('tasks')
+        .select('*, case_stages(nombre)')
+        .eq('case_id', casoId)
+        .order('creado_en', { ascending: false }),
+      supabase
+        .from('documents')
+        .select('*')
+        .eq('case_id', casoId),
+    ])
     setTareas(data || [])
+    const map = {}
+    ;(docs || []).forEach(d => {
+      if (!d.task_id) return
+      if (!map[d.task_id]) map[d.task_id] = []
+      map[d.task_id].push(d)
+    })
+    setDocsPorTarea(map)
   }
 
   const agregar = async () => {
@@ -820,9 +933,61 @@ function TareasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
   }
 
   const eliminarTarea = async (id) => {
+    const docs = docsPorTarea[id] || []
+    if (docs.length > 0) {
+      await supabase.storage.from('documentos').remove(docs.map(d => d.url))
+      await supabase.from('documents').delete().in('id', docs.map(d => d.id))
+    }
     await supabase.from('tasks').delete().eq('id', id)
     fetchTareas()
   }
+
+  const subirDocTarea = async (task, e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSubiendoTarea(task.id)
+    const path = `${casoId}/tareas/${task.id}/${Date.now()}_${file.name}`
+    const { error: uploadError } = await supabase.storage.from('documentos').upload(path, file)
+    if (!uploadError) {
+      const { error: dbError } = await supabase.from('documents').insert([{
+        case_id: casoId,
+        stage_id: task.stage_id || null,
+        task_id: task.id,
+        nombre: file.name,
+        tipo_documento: file.type,
+        url: path
+      }])
+      if (dbError) {
+        alert('Ejecuta en Supabase el SQL documents_task_id.sql.\n' + dbError.message)
+      } else {
+        await fetchTareas()
+      }
+    } else {
+      alert('Error al subir: ' + uploadError.message)
+    }
+    setSubiendoTarea(null)
+    e.target.value = ''
+  }
+
+  const eliminarDoc = async (doc) => {
+    if (vistaDoc?.id === doc.id) {
+      if (vistaDoc.url) URL.revokeObjectURL(vistaDoc.url)
+      setVistaDoc(null)
+    }
+    await supabase.storage.from('documentos').remove([doc.url])
+    await supabase.from('documents').delete().eq('id', doc.id)
+    fetchTareas()
+  }
+
+  const visualizarDoc = async (doc) => {
+    if (vistaDoc?.url) URL.revokeObjectURL(vistaDoc.url)
+    const { data } = await supabase.storage.from('documentos').download(doc.url)
+    if (!data) return
+    setVistaDoc({ ...doc, url: URL.createObjectURL(data) })
+  }
+
+  const esImagen = (tipo) => tipo?.startsWith('image/')
+  const esPdf = (tipo, nombre) => tipo?.includes('pdf') || nombre?.toLowerCase().endsWith('.pdf')
 
   return (
     <div style={styles.tabContent}>
@@ -835,23 +1000,72 @@ function TareasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
       {tareas.length === 0 ? (
         <p style={{ color: '#b2bec3', textAlign: 'center', padding: '40px' }}>No hay tareas</p>
       ) : (
-        tareas.map(t => (
-          <div key={t.id} style={{ ...styles.tareaCard, opacity: t.completado ? 0.6 : 1 }}>
-            <input type="checkbox" checked={t.completado} onChange={() => puedeEditar && toggleTarea(t.id, t.completado)} disabled={!puedeEditar} style={{ cursor: puedeEditar ? 'pointer' : 'default', width: '18px', height: '18px' }} />
-            <div style={{ flex: 1 }}>
-              <span style={{ fontSize: '14px', color: '#2d3436', textDecoration: t.completado ? 'line-through' : 'none' }}>{t.titulo}</span>
-              {t.case_stages?.nombre && (
-                <span style={{ display: 'block', fontSize: '11px', color: '#c9a84c', marginTop: '2px' }}>Etapa: {t.case_stages.nombre}</span>
+        tareas.map(t => {
+          const docs = docsPorTarea[t.id] || []
+          return (
+            <div key={t.id} style={{ ...styles.tareaBloque, opacity: t.completado ? 0.75 : 1 }}>
+              <div style={{ ...styles.tareaCard, marginBottom: 0, border: 'none', backgroundColor: 'transparent' }}>
+                <input type="checkbox" checked={t.completado} onChange={() => puedeEditar && toggleTarea(t.id, t.completado)} disabled={!puedeEditar} style={{ cursor: puedeEditar ? 'pointer' : 'default', width: '18px', height: '18px' }} />
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: '14px', color: '#2d3436', textDecoration: t.completado ? 'line-through' : 'none' }}>{t.titulo}</span>
+                  {t.case_stages?.nombre && (
+                    <span style={{ display: 'block', fontSize: '11px', color: '#c9a84c', marginTop: '2px' }}>Etapa: {t.case_stages.nombre}</span>
+                  )}
+                </div>
+                {t.fecha_completado && <span style={{ fontSize: '12px', color: '#b2bec3' }}>{new Date(t.fecha_completado).toLocaleDateString('es-CO')}</span>}
+                {puedeBorrar && (
+                  <button style={styles.btnTareaEliminar} onClick={() => eliminarTarea(t.id)} title="Eliminar tarea">
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
+              {docs.length > 0 && (
+                <div style={styles.tareaDocsBox}>
+                  {docs.map(doc => (
+                    <div key={doc.id} style={styles.etapaDocRow}>
+                      <span style={{ fontSize: '12px', color: '#2d3436', flex: 1 }}>📄 {doc.nombre}</span>
+                      <button style={styles.btnVer} onClick={() => visualizarDoc(doc)}><Eye size={14} /> Ver</button>
+                      {puedeBorrar && (
+                        <button style={styles.btnTareaEliminar} onClick={() => eliminarDoc(doc)}><X size={14} /></button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {vistaDoc?.task_id === t.id && (
+                <div style={styles.viewerBox}>
+                  <div style={styles.viewerHeader}>
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a2e' }}>{vistaDoc.nombre}</span>
+                    <button style={styles.closeBtn} onClick={() => { if (vistaDoc?.url) URL.revokeObjectURL(vistaDoc.url); setVistaDoc(null) }}><X size={16} /></button>
+                  </div>
+                  {esImagen(vistaDoc.tipo_documento) ? (
+                    <img src={vistaDoc.url} alt={vistaDoc.nombre} style={styles.viewerImg} />
+                  ) : esPdf(vistaDoc.tipo_documento, vistaDoc.nombre) ? (
+                    <iframe src={vistaDoc.url} title={vistaDoc.nombre} style={{ ...styles.viewerFrame, height: '50vh' }} />
+                  ) : (
+                    <div style={styles.viewerFallback}>
+                      <p style={{ color: '#636e72', fontSize: '13px' }}>Vista previa no disponible.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {puedeEditar && (
+                <label style={{ ...styles.btnSubirMini, marginTop: '6px', fontSize: '11px', padding: '6px 10px', alignSelf: 'flex-start' }}>
+                  {subiendoTarea === t.id ? 'Subiendo...' : '+ Documento a esta tarea'}
+                  <input
+                    type="file"
+                    style={{ display: 'none' }}
+                    disabled={subiendoTarea === t.id}
+                    onChange={e => subirDocTarea(t, e)}
+                  />
+                </label>
               )}
             </div>
-            {t.fecha_completado && <span style={{ fontSize: '12px', color: '#b2bec3' }}>{new Date(t.fecha_completado).toLocaleDateString('es-CO')}</span>}
-            {puedeBorrar && (
-              <button style={styles.btnTareaEliminar} onClick={() => eliminarTarea(t.id)} title="Eliminar tarea">
-                <X size={16} />
-              </button>
-            )}
-          </div>
-        ))
+          )
+        })
       )}
     </div>
   )
@@ -1136,6 +1350,17 @@ const styles = {
   etapaDetalle: { marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e9ecef', display: 'flex', flexDirection: 'column', gap: '8px' },
   etapaLabel: { fontSize: '11px', fontWeight: '700', color: '#b2bec3', textTransform: 'uppercase', marginTop: '4px' },
   etapaDocRow: { display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#fff', borderRadius: '6px', padding: '8px 10px' },
+  tareaBloque: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    backgroundColor: '#fff',
+    borderRadius: '8px',
+    padding: '8px 10px',
+    marginBottom: '8px',
+    border: '1px solid #eef0f3',
+  },
+  tareaDocsBox: { display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '28px' },
   btnSubirMini: { display: 'inline-block', backgroundColor: '#fff', color: '#1a1a2e', border: '1px dashed #dfe6e9', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '12px', textAlign: 'center' },
   btnAgregarMini: { display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '0 12px', borderRadius: '8px', cursor: 'pointer' },
   selectEstado: { border: '1px solid #dfe6e9', borderRadius: '6px', padding: '4px 8px', fontSize: '12px', outline: 'none', cursor: 'pointer', backgroundColor: '#fff', fontWeight: '600' },
