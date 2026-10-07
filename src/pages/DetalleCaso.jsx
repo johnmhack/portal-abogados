@@ -783,8 +783,7 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
                             />
                             <span style={{
                               fontSize: '13px',
-                              color: '#2d3436',
-                              textDecoration: t.completado ? 'line-through' : 'none',
+                              color: t.completado ? '#8a94a6' : '#2d3436',
                               flex: 1
                             }}>{t.titulo}</span>
                             {puedeBorrar && (
@@ -1007,7 +1006,7 @@ function TareasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
               <div style={{ ...styles.tareaCard, marginBottom: 0, border: 'none', backgroundColor: 'transparent' }}>
                 <input type="checkbox" checked={t.completado} onChange={() => puedeEditar && toggleTarea(t.id, t.completado)} disabled={!puedeEditar} style={{ cursor: puedeEditar ? 'pointer' : 'default', width: '18px', height: '18px' }} />
                 <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: '14px', color: '#2d3436', textDecoration: t.completado ? 'line-through' : 'none' }}>{t.titulo}</span>
+                  <span style={{ fontSize: '14px', color: t.completado ? '#8a94a6' : '#2d3436' }}>{t.titulo}</span>
                   {t.case_stages?.nombre && (
                     <span style={{ display: 'block', fontSize: '11px', color: '#c9a84c', marginTop: '2px' }}>Etapa: {t.case_stages.nombre}</span>
                   )}

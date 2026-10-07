@@ -374,10 +374,7 @@ export default function InformeCliente({ casoId, onClose }) {
                         {tareasEtapa.map((t) => (
                           <li key={t.id} style={styles.tareaItem}>
                             <span style={styles.tareaCheck}>{t.completado ? '✓' : '○'}</span>
-                            <span style={{
-                              textDecoration: t.completado ? 'line-through' : 'none',
-                              color: t.completado ? '#8a94a6' : '#2d3436',
-                            }}>
+                            <span style={{ color: t.completado ? '#8a94a6' : '#2d3436' }}>
                               {t.titulo}
                             </span>
                           </li>
@@ -407,10 +404,7 @@ export default function InformeCliente({ casoId, onClose }) {
                           fontWeight: resumen.tareaActual?.id === t.id && !t.completado ? 600 : 400,
                         }}>
                           <span style={styles.tareaCheck}>{t.completado ? '✓' : '○'}</span>
-                          <span style={{
-                            textDecoration: t.completado ? 'line-through' : 'none',
-                            color: t.completado ? '#8a94a6' : '#2d3436',
-                          }}>
+                          <span style={{ color: t.completado ? '#8a94a6' : '#2d3436' }}>
                             {t.titulo}
                             {resumen.tareaActual?.id === t.id && !t.completado ? ' (actual)' : ''}
                           </span>
