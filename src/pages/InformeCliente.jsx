@@ -21,6 +21,7 @@ function nombreCompleto(u) {
 export default function InformeCliente({ casoId, onClose }) {
   const [caso, setCaso] = useState(null)
   const [etapas, setEtapas] = useState([])
+  const [tareas, setTareas] = useState([])
   const [actuaciones, setActuaciones] = useState([])
   const [proximaAudiencia, setProximaAudiencia] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -48,12 +49,17 @@ export default function InformeCliente({ casoId, onClose }) {
       casoData = full.data
     }
 
-    const [{ data: etapasData }, { data: eventosData }, { data: auds }] = await Promise.all([
+    const [{ data: etapasData }, { data: tareasData }, { data: eventosData }, { data: auds }] = await Promise.all([
       supabase
         .from('case_stages')
         .select('*')
         .eq('case_id', casoId)
         .order('orden', { ascending: true }),
+      supabase
+        .from('tasks')
+        .select('id, titulo, completado, stage_id, creado_en, fecha_completado')
+        .eq('case_id', casoId)
+        .order('creado_en', { ascending: true }),
       supabase
         .from('events')
         .select('id, descripcion, tipo, creado_en')
@@ -72,6 +78,7 @@ export default function InformeCliente({ casoId, onClose }) {
 
     setCaso(casoData)
     setEtapas(etapasData || [])
+    setTareas(tareasData || [])
     setActuaciones(eventosData || [])
     setProximaAudiencia(auds?.[0] || null)
     setLoading(false)
@@ -82,6 +89,16 @@ export default function InformeCliente({ casoId, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [casoId])
 
+  const tareasPorEtapa = useMemo(() => {
+    const map = {}
+    tareas.forEach((t) => {
+      if (!t.stage_id) return
+      if (!map[t.stage_id]) map[t.stage_id] = []
+      map[t.stage_id].push(t)
+    })
+    return map
+  }, [tareas])
+
   const resumen = useMemo(() => {
     const completadas = etapas.filter(e => e.estado === 'completado')
     const enCurso = etapas.find(e => e.estado === 'en_proceso')
@@ -91,20 +108,31 @@ export default function InformeCliente({ casoId, onClose }) {
       ? Math.round((completadas.length / relevantes) * 100)
       : 0
 
+    const tareasEtapaActual = enCurso ? (tareasPorEtapa[enCurso.id] || []) : []
+    const tareaActual =
+      tareasEtapaActual.find(t => !t.completado) ||
+      (tareasEtapaActual.length > 0 ? tareasEtapaActual[tareasEtapaActual.length - 1] : null)
+
     let situacion = 'El proceso se encuentra en gestión inicial por el despacho.'
     if (['cerrado', 'ganado', 'perdido'].includes(caso?.status)) {
       situacion = caso.status === 'ganado'
         ? 'El proceso culminó con resultado favorable.'
         : 'El proceso se encuentra cerrado.'
     } else if (enCurso) {
-      situacion = `El proceso se encuentra actualmente en: ${enCurso.nombre}.`
+      situacion = tareaActual
+        ? `El proceso se encuentra actualmente en la etapa: ${enCurso.nombre}. Tarea en curso: ${tareaActual.titulo}.`
+        : `El proceso se encuentra actualmente en: ${enCurso.nombre}.`
     } else if (completadas.length > 0) {
       const ultima = completadas[completadas.length - 1]
-      situacion = `La etapa más reciente culminada es: ${ultima.nombre}. El despacho continúa con el trámite correspondiente.`
+      const tareasUltima = tareasPorEtapa[ultima.id] || []
+      const ultimaTarea = tareasUltima.length > 0 ? tareasUltima[tareasUltima.length - 1] : null
+      situacion = ultimaTarea
+        ? `La etapa más reciente culminada es: ${ultima.nombre}. Última tarea: ${ultimaTarea.titulo}. El despacho continúa con el trámite correspondiente.`
+        : `La etapa más reciente culminada es: ${ultima.nombre}. El despacho continúa con el trámite correspondiente.`
     }
 
-    return { completadas, enCurso, progreso, situacion }
-  }, [etapas, caso?.status])
+    return { completadas, enCurso, progreso, situacion, tareaActual }
+  }, [etapas, caso?.status, tareasPorEtapa])
 
   if (loading) {
     return (
@@ -161,7 +189,8 @@ export default function InformeCliente({ casoId, onClose }) {
 
       const worker = html2pdf()
         .set({
-          margin: [12, 12, 26, 12],
+          // Más margen inferior para que el contenido no invada el pie
+          margin: [12, 12, 34, 12],
           filename: archivo,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
@@ -174,9 +203,14 @@ export default function InformeCliente({ casoId, onClose }) {
       const total = pdf.internal.getNumberOfPages()
       const pageW = pdf.internal.pageSize.getWidth()
       const pageH = pdf.internal.pageSize.getHeight()
+      const pieAlto = 24
 
       for (let i = 1; i <= total; i++) {
         pdf.setPage(i)
+        // Cubre cualquier texto que se haya colado en la zona del pie
+        pdf.setFillColor(255, 255, 255)
+        pdf.rect(0, pageH - pieAlto, pageW, pieAlto, 'F')
+
         pdf.setDrawColor(210, 210, 210)
         pdf.setLineWidth(0.25)
         pdf.line(12, pageH - 20, pageW - 12, pageH - 20)
@@ -287,7 +321,9 @@ export default function InformeCliente({ casoId, onClose }) {
           <p style={styles.situacionTexto}>{resumen.situacion}</p>
           {resumen.enCurso && !['cerrado', 'ganado', 'perdido'].includes(caso.status) && (
             <p style={styles.situacionHint}>
-              Esta es la etapa en la que se encuentra el proceso en este momento.
+              {resumen.tareaActual
+                ? `Etapa actual: ${resumen.enCurso.nombre} · Tarea actual: ${resumen.tareaActual.titulo}`
+                : 'Esta es la etapa en la que se encuentra el proceso en este momento.'}
             </p>
           )}
         </div>
@@ -316,24 +352,42 @@ export default function InformeCliente({ casoId, onClose }) {
           </p>
         ) : (
           <div style={styles.timeline}>
-            {resumen.completadas.map((etapa) => (
-              <div key={etapa.id} style={styles.timelineItem} className="timeline-item-print">
-                <div style={styles.timelineIcon}>
-                  <CheckCircle size={18} color="#00b894" />
+            {resumen.completadas.map((etapa) => {
+              const tareasEtapa = tareasPorEtapa[etapa.id] || []
+              return (
+                <div key={etapa.id} style={styles.timelineItem} className="timeline-item-print">
+                  <div style={styles.timelineIcon}>
+                    <CheckCircle size={18} color="#00b894" />
+                  </div>
+                  <div style={styles.timelineBody}>
+                    <p style={styles.timelineNombre}>{etapa.nombre}</p>
+                    {etapa.fecha_completado && (
+                      <p style={styles.timelineFecha}>
+                        Culminado el {new Date(etapa.fecha_completado).toLocaleDateString('es-CO')}
+                      </p>
+                    )}
+                    {etapa.notas?.trim() && (
+                      <p style={styles.timelineNotas}>{etapa.notas.trim()}</p>
+                    )}
+                    {tareasEtapa.length > 0 && (
+                      <ul style={styles.tareasLista}>
+                        {tareasEtapa.map((t) => (
+                          <li key={t.id} style={styles.tareaItem}>
+                            <span style={styles.tareaCheck}>{t.completado ? '✓' : '○'}</span>
+                            <span style={{
+                              textDecoration: t.completado ? 'line-through' : 'none',
+                              color: t.completado ? '#8a94a6' : '#2d3436',
+                            }}>
+                              {t.titulo}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
-                <div style={styles.timelineBody}>
-                  <p style={styles.timelineNombre}>{etapa.nombre}</p>
-                  {etapa.fecha_completado && (
-                    <p style={styles.timelineFecha}>
-                      Culminado el {new Date(etapa.fecha_completado).toLocaleDateString('es-CO')}
-                    </p>
-                  )}
-                  {etapa.notas?.trim() && (
-                    <p style={styles.timelineNotas}>{etapa.notas.trim()}</p>
-                  )}
-                </div>
-              </div>
-            ))}
+              )
+            })}
             {resumen.enCurso && (
               <div style={styles.timelineItem} className="timeline-item-print">
                 <div style={{ ...styles.timelineIcon, backgroundColor: '#c9a84c18' }}>
@@ -344,6 +398,25 @@ export default function InformeCliente({ casoId, onClose }) {
                   <p style={styles.badgeActual}>En curso</p>
                   {resumen.enCurso.notas?.trim() && (
                     <p style={styles.timelineNotas}>{resumen.enCurso.notas.trim()}</p>
+                  )}
+                  {(tareasPorEtapa[resumen.enCurso.id] || []).length > 0 && (
+                    <ul style={styles.tareasLista}>
+                      {(tareasPorEtapa[resumen.enCurso.id] || []).map((t) => (
+                        <li key={t.id} style={{
+                          ...styles.tareaItem,
+                          fontWeight: resumen.tareaActual?.id === t.id && !t.completado ? 600 : 400,
+                        }}>
+                          <span style={styles.tareaCheck}>{t.completado ? '✓' : '○'}</span>
+                          <span style={{
+                            textDecoration: t.completado ? 'line-through' : 'none',
+                            color: t.completado ? '#8a94a6' : '#2d3436',
+                          }}>
+                            {t.titulo}
+                            {resumen.tareaActual?.id === t.id && !t.completado ? ' (actual)' : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
               </div>
@@ -424,7 +497,7 @@ const styles = {
     width: '100%', maxWidth: '720px', maxHeight: '90vh', overflowY: 'auto',
   },
   loading: { textAlign: 'center', color: '#b2bec3', padding: '40px' },
-  empty: { color: '#8a94a6', fontSize: '13px', lineHeight: 1.5, margin: '0 0 8px' },
+  empty: { color: '#8a94a6', fontSize: '13px', lineHeight: 1.5, margin: '0 0 8px', textAlign: 'justify' },
 
   header: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
@@ -471,7 +544,7 @@ const styles = {
   },
   descTexto: {
     fontSize: '14px', color: '#2d3436', margin: 0, lineHeight: 1.55,
-    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+    whiteSpace: 'pre-wrap', wordBreak: 'break-word', textAlign: 'justify',
   },
 
   situacionBox: {
@@ -481,8 +554,8 @@ const styles = {
     fontSize: '11px', color: '#c9a84c', textTransform: 'uppercase',
     letterSpacing: '0.05em', fontWeight: 700, margin: '0 0 8px',
   },
-  situacionTexto: { fontSize: '15px', color: '#fff', fontWeight: 600, margin: 0, lineHeight: 1.45 },
-  situacionHint: { fontSize: '12px', color: '#a0aec0', margin: '8px 0 0' },
+  situacionTexto: { fontSize: '15px', color: '#fff', fontWeight: 600, margin: 0, lineHeight: 1.45, textAlign: 'justify' },
+  situacionHint: { fontSize: '12px', color: '#a0aec0', margin: '8px 0 0', textAlign: 'justify' },
 
   progresoBox: { backgroundColor: '#f8f9fa', borderRadius: '10px', padding: '16px', marginBottom: '22px' },
   progresoHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px' },
@@ -490,7 +563,7 @@ const styles = {
   progresoNum: { fontSize: '13px', fontWeight: 700, color: '#1a1a2e' },
   progresoBar: { height: '10px', backgroundColor: '#dfe6e9', borderRadius: '5px', overflow: 'hidden' },
   progresoFill: { height: '100%', backgroundColor: '#00b894', borderRadius: '5px' },
-  progresoSub: { fontSize: '12px', color: '#8a94a6', marginTop: '6px', marginBottom: 0 },
+  progresoSub: { fontSize: '12px', color: '#8a94a6', marginTop: '6px', marginBottom: 0, textAlign: 'justify' },
 
   sectionTitle: { fontSize: '15px', fontWeight: 700, color: '#1a1a2e', margin: '0 0 14px' },
 
@@ -506,10 +579,32 @@ const styles = {
   },
   timelineNombre: { fontSize: '14px', fontWeight: 600, color: '#1a1a2e', margin: 0 },
   timelineFecha: { fontSize: '12px', color: '#00b894', margin: '4px 0 0' },
-  timelineNotas: { fontSize: '13px', color: '#636e72', margin: '6px 0 0', lineHeight: 1.4 },
+  timelineNotas: { fontSize: '13px', color: '#636e72', margin: '6px 0 0', lineHeight: 1.5, textAlign: 'justify', whiteSpace: 'pre-wrap', wordBreak: 'break-word' },
   badgeActual: {
     display: 'inline-block', marginTop: '6px', fontSize: '11px', fontWeight: 700,
     color: '#c9a84c', backgroundColor: '#c9a84c20', padding: '2px 8px', borderRadius: '10px',
+  },
+  tareasLista: {
+    margin: '10px 0 0',
+    padding: '0 0 0 4px',
+    listStyle: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '5px',
+  },
+  tareaItem: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '8px',
+    fontSize: '13px',
+    lineHeight: 1.4,
+    textAlign: 'justify',
+  },
+  tareaCheck: {
+    flexShrink: 0,
+    width: '14px',
+    color: '#c9a84c',
+    fontWeight: 700,
   },
 
   actList: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '22px' },
@@ -517,7 +612,7 @@ const styles = {
     display: 'flex', gap: '12px', alignItems: 'flex-start',
     padding: '11px 13px', backgroundColor: '#f8f9fa', borderRadius: '8px',
   },
-  actDesc: { margin: 0, fontSize: '13px', color: '#1a1a2e', fontWeight: 500 },
+  actDesc: { margin: 0, fontSize: '13px', color: '#1a1a2e', fontWeight: 500, textAlign: 'justify', lineHeight: 1.45 },
   actTipo: { margin: '3px 0 0', fontSize: '11px', color: '#8a94a6', textTransform: 'capitalize' },
   actFecha: { fontSize: '12px', color: '#8a94a6', whiteSpace: 'nowrap' },
 
@@ -527,7 +622,7 @@ const styles = {
     marginBottom: '8px',
   },
   audTitulo: { margin: 0, fontSize: '14px', fontWeight: 600, color: '#1a1a2e' },
-  audMeta: { margin: '4px 0 0', fontSize: '12px', color: '#636e72', lineHeight: 1.4 },
+  audMeta: { margin: '4px 0 0', fontSize: '12px', color: '#636e72', lineHeight: 1.4, textAlign: 'justify' },
 
   footer: {
     marginTop: '28px', paddingTop: '16px', borderTop: '1px solid #f0f2f5',
