@@ -499,7 +499,7 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
       .select('*')
       .eq('case_id', casoId)
       .not('stage_id', 'is', null)
-      .order('creado_en', { ascending: false })
+      .order('creado_en', { ascending: true })
     const tareasMap = {}
     ;(tareas || []).forEach(t => {
       if (!tareasMap[t.stage_id]) tareasMap[t.stage_id] = []
@@ -903,7 +903,7 @@ function TareasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
         .from('tasks')
         .select('*, case_stages(nombre)')
         .eq('case_id', casoId)
-        .order('creado_en', { ascending: false }),
+        .order('creado_en', { ascending: true }),
       supabase
         .from('documents')
         .select('*')
