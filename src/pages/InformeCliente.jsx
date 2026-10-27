@@ -18,6 +18,24 @@ function nombreCompleto(u) {
   return `${u.nombre || ''} ${u.apellido || ''}`.trim() || null
 }
 
+function formatearFecha(valor) {
+  if (!valor) return null
+  const d = String(valor).length <= 10
+    ? new Date(`${valor}T12:00:00`)
+    : new Date(valor)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('es-CO')
+}
+
+function fechaTarea(t) {
+  if (t.completado && t.fecha_completado) return formatearFecha(t.fecha_completado)
+  return formatearFecha(t.fecha_completado || t.creado_en)
+}
+
+function fechaNotasEtapa(etapa) {
+  return formatearFecha(etapa.fecha || etapa.fecha_completado)
+}
+
 export default function InformeCliente({ casoId, onClose }) {
   const [caso, setCaso] = useState(null)
   const [etapas, setEtapas] = useState([])
@@ -354,6 +372,7 @@ export default function InformeCliente({ casoId, onClose }) {
           <div style={styles.timeline}>
             {resumen.completadas.map((etapa) => {
               const tareasEtapa = tareasPorEtapa[etapa.id] || []
+              const fechaNotas = fechaNotasEtapa(etapa)
               return (
                 <div key={etapa.id} style={styles.timelineItem} className="timeline-item-print">
                   <div style={styles.timelineIcon}>
@@ -363,23 +382,35 @@ export default function InformeCliente({ casoId, onClose }) {
                     <p style={styles.timelineNombre}>{etapa.nombre}</p>
                     {etapa.fecha_completado && (
                       <p style={styles.timelineFecha}>
-                        Culminado el {new Date(etapa.fecha_completado).toLocaleDateString('es-CO')}
+                        Culminado el {formatearFecha(etapa.fecha_completado)}
                       </p>
                     )}
                     {etapa.notas?.trim() && (
-                      <p style={styles.timelineNotas}>{etapa.notas.trim()}</p>
+                      <div style={styles.notaBox}>
+                        <p style={styles.subLabel}>
+                          Notas{fechaNotas ? ` · ${fechaNotas}` : ''}
+                        </p>
+                        <p style={styles.timelineNotas}>{etapa.notas.trim()}</p>
+                      </div>
                     )}
                     {tareasEtapa.length > 0 && (
-                      <ul style={styles.tareasLista}>
-                        {tareasEtapa.map((t) => (
-                          <li key={t.id} style={styles.tareaItem}>
-                            <span style={styles.tareaCheck}>{t.completado ? '✓' : '○'}</span>
-                            <span style={{ color: t.completado ? '#8a94a6' : '#2d3436' }}>
-                              {t.titulo}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
+                      <>
+                        <p style={styles.subLabel}>Tareas</p>
+                        <ul style={styles.tareasLista}>
+                          {tareasEtapa.map((t) => {
+                            const fecha = fechaTarea(t)
+                            return (
+                              <li key={t.id} style={styles.tareaItem}>
+                                <span style={styles.tareaCheck}>{t.completado ? '✓' : '○'}</span>
+                                <span style={{ color: t.completado ? '#8a94a6' : '#2d3436', flex: 1 }}>
+                                  {t.titulo}
+                                </span>
+                                {fecha && <span style={styles.tareaFecha}>{fecha}</span>}
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </>
                     )}
                   </div>
                 </div>
@@ -394,23 +425,35 @@ export default function InformeCliente({ casoId, onClose }) {
                   <p style={styles.timelineNombre}>{resumen.enCurso.nombre}</p>
                   <p style={styles.badgeActual}>En curso</p>
                   {resumen.enCurso.notas?.trim() && (
-                    <p style={styles.timelineNotas}>{resumen.enCurso.notas.trim()}</p>
+                    <div style={styles.notaBox}>
+                      <p style={styles.subLabel}>
+                        Notas{fechaNotasEtapa(resumen.enCurso) ? ` · ${fechaNotasEtapa(resumen.enCurso)}` : ''}
+                      </p>
+                      <p style={styles.timelineNotas}>{resumen.enCurso.notas.trim()}</p>
+                    </div>
                   )}
                   {(tareasPorEtapa[resumen.enCurso.id] || []).length > 0 && (
-                    <ul style={styles.tareasLista}>
-                      {(tareasPorEtapa[resumen.enCurso.id] || []).map((t) => (
-                        <li key={t.id} style={{
-                          ...styles.tareaItem,
-                          fontWeight: resumen.tareaActual?.id === t.id && !t.completado ? 600 : 400,
-                        }}>
-                          <span style={styles.tareaCheck}>{t.completado ? '✓' : '○'}</span>
-                          <span style={{ color: t.completado ? '#8a94a6' : '#2d3436' }}>
-                            {t.titulo}
-                            {resumen.tareaActual?.id === t.id && !t.completado ? ' (actual)' : ''}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                    <>
+                      <p style={styles.subLabel}>Tareas</p>
+                      <ul style={styles.tareasLista}>
+                        {(tareasPorEtapa[resumen.enCurso.id] || []).map((t) => {
+                          const fecha = fechaTarea(t)
+                          return (
+                            <li key={t.id} style={{
+                              ...styles.tareaItem,
+                              fontWeight: resumen.tareaActual?.id === t.id && !t.completado ? 600 : 400,
+                            }}>
+                              <span style={styles.tareaCheck}>{t.completado ? '✓' : '○'}</span>
+                              <span style={{ color: t.completado ? '#8a94a6' : '#2d3436', flex: 1 }}>
+                                {t.titulo}
+                                {resumen.tareaActual?.id === t.id && !t.completado ? ' (actual)' : ''}
+                              </span>
+                              {fecha && <span style={styles.tareaFecha}>{fecha}</span>}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </>
                   )}
                 </div>
               </div>
@@ -573,13 +616,22 @@ const styles = {
   },
   timelineNombre: { fontSize: '14px', fontWeight: 600, color: '#1a1a2e', margin: 0 },
   timelineFecha: { fontSize: '12px', color: '#00b894', margin: '4px 0 0' },
-  timelineNotas: { fontSize: '13px', color: '#636e72', margin: '6px 0 0', lineHeight: 1.5, textAlign: 'justify', whiteSpace: 'pre-wrap', wordBreak: 'break-word' },
+  timelineNotas: { fontSize: '13px', color: '#636e72', margin: 0, lineHeight: 1.5, textAlign: 'justify', whiteSpace: 'pre-wrap', wordBreak: 'break-word' },
+  notaBox: { marginTop: '8px' },
+  subLabel: {
+    fontSize: '11px',
+    fontWeight: 700,
+    color: '#8a94a6',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    margin: '10px 0 4px',
+  },
   badgeActual: {
     display: 'inline-block', marginTop: '6px', fontSize: '11px', fontWeight: 700,
     color: '#c9a84c', backgroundColor: '#c9a84c20', padding: '2px 8px', borderRadius: '10px',
   },
   tareasLista: {
-    margin: '10px 0 0',
+    margin: '0',
     padding: '0 0 0 4px',
     listStyle: 'none',
     display: 'flex',
@@ -599,6 +651,12 @@ const styles = {
     width: '14px',
     color: '#c9a84c',
     fontWeight: 700,
+  },
+  tareaFecha: {
+    flexShrink: 0,
+    fontSize: '11px',
+    color: '#8a94a6',
+    whiteSpace: 'nowrap',
   },
 
   actList: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '22px' },
