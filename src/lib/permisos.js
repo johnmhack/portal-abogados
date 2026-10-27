@@ -23,6 +23,11 @@ export function veEstadisticas(rol) {
   return ['admin', 'superadmin'].includes(rol)
 }
 
+/** Honorarios: solo administración (admin, superadmin, asistente). */
+export function puedeVerHonorarios(rol) {
+  return veTodoElDespacho(rol)
+}
+
 /** Quién puede figurar como abogado a cargo en un caso (sin otro usuario/login). */
 export const ROLES_ASIGNABLES_CASO = ['abogado', 'socio', 'asistente', 'contador', 'admin']
 

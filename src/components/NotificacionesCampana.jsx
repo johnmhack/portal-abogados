@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
 import { Bell } from 'lucide-react'
-import { veTodoElDespacho } from '../lib/permisos'
+import { veTodoElDespacho, puedeVerHonorarios } from '../lib/permisos'
 
 const DIAS_PROXIMAS = 3
 const HORAS_PROXIMAS = DIAS_PROXIMAS * 24
@@ -57,7 +57,41 @@ export async function notificarAudiencia({ caseId, tituloAudiencia, fechaHoraIso
   if (error) console.log('notificarAudiencia:', error.message)
 }
 
-export default function NotificacionesCampana({ userProfile, onIrAudiencias }) {
+/** Avisos de honorarios solo a admin, superadmin y asistente. */
+export async function notificarHonorario({ caseId, titulo, mensaje }) {
+  if (!caseId) return
+
+  const { data: caso } = await supabase
+    .from('cases')
+    .select('id, titulo')
+    .eq('id', caseId)
+    .maybeSingle()
+
+  if (!caso) return
+
+  const { data: dest } = await supabase
+    .from('users')
+    .select('id')
+    .in('rol', ['admin', 'superadmin', 'asistente'])
+
+  const destinatarios = [...new Set((dest || []).map(u => u.id))]
+  if (destinatarios.length === 0) return
+
+  const rows = destinatarios.map(user_id => ({
+    user_id,
+    titulo,
+    mensaje: `${mensaje} — ${caso.titulo}`,
+    tipo: 'honorario',
+    link_tipo: 'caso',
+    link_id: caso.id,
+    leida: false,
+  }))
+
+  const { error } = await supabase.from('notifications').insert(rows)
+  if (error) console.log('notificarHonorario:', error.message)
+}
+
+export default function NotificacionesCampana({ userProfile, onIrAudiencias, onIrHonorarios }) {
   const [abierto, setAbierto] = useState(false)
   const [items, setItems] = useState([])
   const [proximas, setProximas] = useState([])
@@ -80,7 +114,7 @@ export default function NotificacionesCampana({ userProfile, onIrAudiencias }) {
     if (!userProfile?.id) return
     setLoading(true)
 
-    const [{ data: notifs }, audienciasRes] = await Promise.all([
+    const [{ data: notifs }, audienciasRes, honorariosRes] = await Promise.all([
       supabase
         .from('notifications')
         .select('*')
@@ -88,10 +122,11 @@ export default function NotificacionesCampana({ userProfile, onIrAudiencias }) {
         .order('creado_en', { ascending: false })
         .limit(30),
       cargarProximasAudiencias(userProfile),
+      cargarProximosHonorarios(userProfile),
     ])
 
     setItems(notifs || [])
-    setProximas(audienciasRes || [])
+    setProximas([...(honorariosRes || []), ...(audienciasRes || [])])
     setLoading(false)
   }
 
@@ -139,11 +174,19 @@ export default function NotificacionesCampana({ userProfile, onIrAudiencias }) {
                   <p style={s.seccion}>Próximas {DIAS_PROXIMAS} días</p>
                   {proximas.map(a => (
                     <button
-                      key={`prox-${a.id}`}
+                      key={`prox-${a.tipoAlerta || 'aud'}-${a.id}`}
                       style={{ ...s.item, ...s.itemAlerta }}
-                      onClick={() => { setAbierto(false); onIrAudiencias?.() }}
+                      onClick={() => {
+                        setAbierto(false)
+                        if (a.tipoAlerta === 'honorario') onIrHonorarios?.()
+                        else onIrAudiencias?.()
+                      }}
                     >
-                      <p style={s.itemTitulo}>Audiencia próxima</p>
+                      <p style={s.itemTitulo}>
+                        {a.tipoAlerta === 'honorario'
+                          ? (a.vencida ? 'Honorario vencido' : 'Honorario próximo')
+                          : 'Audiencia próxima'}
+                      </p>
                       <p style={s.itemMsg}>
                         {a.titulo}
                         {a.fecha_hora
@@ -168,6 +211,10 @@ export default function NotificacionesCampana({ userProfile, onIrAudiencias }) {
                     if (n.tipo === 'audiencia') {
                       setAbierto(false)
                       onIrAudiencias?.()
+                    }
+                    if (n.tipo === 'honorario') {
+                      setAbierto(false)
+                      onIrHonorarios?.()
                     }
                   }}
                 >
@@ -217,6 +264,41 @@ async function cargarProximasAudiencias(userProfile) {
   }
 
   return rows
+}
+
+async function cargarProximosHonorarios(userProfile) {
+  if (!puedeVerHonorarios(userProfile?.rol)) return []
+
+  const hoy = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  const desde = new Date(hoy)
+  desde.setDate(desde.getDate() - 7)
+  const hasta = new Date(hoy)
+  hasta.setDate(hasta.getDate() + DIAS_PROXIMAS)
+
+  const { data, error } = await supabase
+    .from('honorario_cuotas')
+    .select('id, concepto, monto, fecha_vencimiento, estado, case_id')
+    .eq('estado', 'pendiente')
+    .gte('fecha_vencimiento', iso(desde))
+    .lte('fecha_vencimiento', iso(hasta))
+    .order('fecha_vencimiento', { ascending: true })
+    .limit(10)
+
+  if (error) {
+    console.log('proximos honorarios:', error.message)
+    return []
+  }
+
+  const hoyIso = iso(hoy)
+  return (data || []).map(c => ({
+    id: c.id,
+    titulo: c.concepto,
+    fecha_hora: c.fecha_vencimiento ? `${c.fecha_vencimiento}T12:00:00` : null,
+    tipoAlerta: 'honorario',
+    vencida: c.fecha_vencimiento && c.fecha_vencimiento < hoyIso,
+  }))
 }
 
 const s = {

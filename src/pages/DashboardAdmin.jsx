@@ -4,12 +4,13 @@ import logo from '../assets/LOGO_RUBY_RAMOS_SIMBOLO.svg'
 import {
   LayoutDashboard, Briefcase, Users, UserCheck,
   LogOut, Menu, X, Plus, CheckCircle, Settings, AlertCircle, FileText, Download,
-  Calendar, Landmark, Eye, Trash2, ClipboardList, ChartColumn
+  Calendar, Landmark, Eye, Trash2, ClipboardList, ChartColumn, Wallet
 } from 'lucide-react'
 import Casos from './Casos'
 import Clientes from './Clientes'
 import Documentos from './Documentos'
 import Audiencias from './Audiencias'
+import Honorarios from './Honorarios'
 import Juzgados from './Juzgados'
 import Estadisticas from './Estadisticas'
 import NotificacionesCampana from '../components/NotificacionesCampana'
@@ -37,6 +38,8 @@ const statusColor = {
 
 export default function DashboardAdmin({ session, userProfile }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [casoInicialId, setCasoInicialId] = useState(null)
+  const [tabCasoInicial, setTabCasoInicial] = useState(null)
   const [activePage, setActivePage] = useState(() => {
     const guardada = sessionStorage.getItem('sar_admin_page') || 'dashboard'
     if (guardada === 'estadisticas' && !veEstadisticas(userProfile?.rol)) return 'dashboard'
@@ -60,6 +63,7 @@ export default function DashboardAdmin({ session, userProfile }) {
     { id: 'juzgados', label: 'Juzgados', icon: Landmark },
     { id: 'documentos', label: 'Documentos', icon: FileText },
     { id: 'audiencias', label: 'Audiencias', icon: Calendar },
+    { id: 'honorarios', label: 'Honorarios', icon: Wallet },
     ...(esSuperadmin ? [{ id: 'sistema', label: 'Sistema', icon: Settings }] : []),
   ]
 
@@ -77,6 +81,7 @@ export default function DashboardAdmin({ session, userProfile }) {
     juzgados: 'Catálogo de despachos judiciales',
     documentos: 'Archivos de los expedientes',
     audiencias: 'Agenda de audiencias',
+    honorarios: 'Acuerdos, abonos y vencimientos',
     sistema: 'Usuarios, roles y mantenimiento',
   }
   const pageSubtitle = pageSubtitles[activePage] || 'Panel del despacho'
@@ -169,7 +174,11 @@ export default function DashboardAdmin({ session, userProfile }) {
             )}
           </div>
           <div style={styles.userInfo}>
-            <NotificacionesCampana userProfile={userProfile} />
+            <NotificacionesCampana
+              userProfile={userProfile}
+              onIrAudiencias={() => setActivePage('audiencias')}
+              onIrHonorarios={() => setActivePage('honorarios')}
+            />
             <div>
               <p style={styles.userName}>{nombreUsuario}{userProfile?.apellido ? ` ${userProfile.apellido}` : ''}</p>
               <p style={styles.userEmail}>{session.user.email}</p>
@@ -182,7 +191,18 @@ export default function DashboardAdmin({ session, userProfile }) {
         <div style={styles.content}>
           {activePage === 'dashboard' && <AdminDashboard />}
           {activePage === 'estadisticas' && <Estadisticas />}
-          {activePage === 'casos' && <Casos session={session} userProfile={userProfile} />}
+          {activePage === 'casos' && (
+            <Casos
+              session={session}
+              userProfile={userProfile}
+              casoInicialId={casoInicialId}
+              tabInicial={tabCasoInicial}
+              onLimpiarCasoInicial={() => {
+                setCasoInicialId(null)
+                setTabCasoInicial(null)
+              }}
+            />
+          )}
           {activePage === 'asignar' && <AdminCasos />}
           {activePage === 'abogados' && (
             <AdminAbogados
@@ -195,6 +215,15 @@ export default function DashboardAdmin({ session, userProfile }) {
           {activePage === 'juzgados' && <Juzgados userProfile={userProfile} />}
           {activePage === 'documentos' && <Documentos userProfile={userProfile} />}
           {activePage === 'audiencias' && <Audiencias userProfile={userProfile} />}
+          {activePage === 'honorarios' && (
+            <Honorarios
+              onAbrirCaso={(id) => {
+                setCasoInicialId(id)
+                setTabCasoInicial('honorarios')
+                setActivePage('casos')
+              }}
+            />
+          )}
           {activePage === 'sistema' && esSuperadmin && <AdminSistema />}
         </div>
       </div>

@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { ArrowLeft, FileText, MessageSquare, Plus, X, TrendingUp, CheckSquare, Pencil, Eye, Download, Trash2 } from 'lucide-react'
+import { ArrowLeft, FileText, MessageSquare, Plus, X, TrendingUp, CheckSquare, Pencil, Eye, Download, Trash2, Wallet } from 'lucide-react'
 import InformeCliente from './InformeCliente'
+import HonorariosTab from './HonorariosTab'
 import PartesCaso from '../components/PartesCaso'
-import { puedeEliminar, veContactoCliente, puedeEditarCaso, casoConCandado, veTodoElDespacho } from '../lib/permisos'
+import { puedeEliminar, veContactoCliente, puedeEditarCaso, casoConCandado, veTodoElDespacho, puedeVerHonorarios } from '../lib/permisos'
 
-export default function DetalleCaso({ casoId, onBack, userProfile }) {
+export default function DetalleCaso({ casoId, onBack, userProfile, tabInicial = null }) {
   const [caso, setCaso] = useState(null)
-  const [tab, setTab] = useState('eventos')
+  const veHonorarios = puedeVerHonorarios(userProfile?.rol)
+  const [tab, setTab] = useState(
+    tabInicial === 'honorarios' && veHonorarios ? 'honorarios' : 'eventos'
+  )
   const [mostrarInforme, setMostrarInforme] = useState(false)
   const [modalEditar, setModalEditar] = useState(false)
   const [clientes, setClientes] = useState([])
@@ -369,6 +373,7 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
           { id: 'etapas', label: 'Proceso', icon: TrendingUp },
           { id: 'tareas', label: 'Tareas', icon: CheckSquare },
           { id: 'documentos', label: 'Documentos', icon: FileText },
+          ...(veHonorarios ? [{ id: 'honorarios', label: 'Honorarios', icon: Wallet }] : []),
         ].map(t => {
           const Icon = t.icon
           const activo = tab === t.id
@@ -393,6 +398,13 @@ export default function DetalleCaso({ casoId, onBack, userProfile }) {
       {tab === 'etapas' && <EtapasTab casoId={casoId} puedeBorrar={puedeBorrar && puedeEditar} puedeEditar={puedeEditar} />}
       {tab === 'tareas' && <TareasTab casoId={casoId} puedeBorrar={puedeBorrar && puedeEditar} puedeEditar={puedeEditar} />}
       {tab === 'documentos' && <DocumentosTab casoId={casoId} puedeBorrar={puedeBorrar && puedeEditar} puedeEditar={puedeEditar} />}
+      {tab === 'honorarios' && veHonorarios && (
+        <HonorariosTab
+          casoId={casoId}
+          puedeEditar={puedeEditar}
+          puedeBorrar={puedeBorrar && puedeEditar}
+        />
+      )}
     </div>
   )
 }

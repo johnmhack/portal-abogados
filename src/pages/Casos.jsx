@@ -4,7 +4,7 @@ import { Plus, Search, Briefcase, X } from 'lucide-react'
 import DetalleCaso from './DetalleCaso'
 import { veTodoElDespacho } from '../lib/permisos'
 
-export default function Casos({ session, userProfile, casoInicialId = null, onLimpiarCasoInicial }) {
+export default function Casos({ session, userProfile, casoInicialId = null, tabInicial = null, onLimpiarCasoInicial }) {
   const [casos, setCasos] = useState([])
   const [clientes, setClientes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -222,7 +222,16 @@ export default function Casos({ session, userProfile, casoInicialId = null, onLi
     perdido: '#d63031'
   }
 
-  if (casoSeleccionado) return <DetalleCaso casoId={casoSeleccionado} userProfile={userProfile} onBack={() => setCasoSeleccionado(null)} />
+  if (casoSeleccionado) {
+    return (
+      <DetalleCaso
+        casoId={casoSeleccionado}
+        userProfile={userProfile}
+        tabInicial={tabInicial}
+        onBack={() => setCasoSeleccionado(null)}
+      />
+    )
+  }
 
   return (
     <div>
