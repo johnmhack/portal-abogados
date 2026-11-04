@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { ArrowLeft, FileText, MessageSquare, Plus, X, TrendingUp, CheckSquare, Pencil, Eye, Download, Trash2, Wallet } from 'lucide-react'
+import { ArrowLeft, FileText, MessageSquare, Plus, X, TrendingUp, CheckSquare, Pencil, Eye, Download, Trash2, Wallet, Mail } from 'lucide-react'
+import { notificarDocumentoCliente } from '../lib/notifyDocument'
 import InformeCliente from './InformeCliente'
 import HonorariosTab from './HonorariosTab'
 import PartesCaso from '../components/PartesCaso'
@@ -475,6 +476,7 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
   const [nuevaTarea, setNuevaTarea] = useState({})
   const [subiendoStage, setSubiendoStage] = useState(null)
   const [subiendoTarea, setSubiendoTarea] = useState(null)
+  const [enviandoDoc, setEnviandoDoc] = useState(null)
   const [vistaDoc, setVistaDoc] = useState(null)
 
   useEffect(() => { fetchTodo() }, [casoId])
@@ -554,14 +556,17 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
     const path = `${casoId}/${stageId}/${Date.now()}_${file.name}`
     const { error: uploadError } = await supabase.storage.from('documentos').upload(path, file)
     if (!uploadError) {
-      await supabase.from('documents').insert([{
+      const { data: creado } = await supabase.from('documents').insert([{
         case_id: casoId,
         stage_id: stageId,
         nombre: file.name,
         tipo_documento: file.type,
         url: path
-      }])
+      }]).select('id').single()
       await fetchTodo()
+      if (creado?.id && window.confirm(`Documento guardado.\n¿Enviarlo ahora al correo del cliente?`)) {
+        await enviarDocAlCliente({ ...creado, nombre: file.name, case_id: casoId, url: path })
+      }
     }
     setSubiendoStage(null)
     e.target.value = ''
@@ -609,6 +614,28 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
     const { data } = await supabase.storage.from('documentos').download(doc.url)
     if (!data) return
     setVistaDoc({ ...doc, url: URL.createObjectURL(data) })
+  }
+
+  const enviarDocAlCliente = async (doc) => {
+    if (!doc?.id) return
+    setEnviandoDoc(doc.id)
+    try {
+      const res = await notificarDocumentoCliente(doc)
+      alert(
+        res.attached
+          ? `Correo enviado a ${res.sent_to} con el archivo adjunto.`
+          : `Correo enviado a ${res.sent_to}. El archivo era muy grande para adjuntarlo.`
+      )
+    } catch (err) {
+      alert('No se pudo enviar el correo: ' + (err.message || err) + (doc.nombre ? `\n(${doc.nombre})` : ''))
+    } finally {
+      setEnviandoDoc(null)
+    }
+  }
+
+  const confirmarEnviarDoc = (doc) => {
+    if (!window.confirm(`¿Enviar "${doc.nombre}" al correo del cliente?`)) return
+    enviarDocAlCliente(doc)
   }
 
   const cerrarVistaDoc = () => {
@@ -742,6 +769,16 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
                         <button style={styles.btnVer} onClick={() => visualizarDocEtapa(doc)} title="Ver">
                           <Eye size={14} /> Ver
                         </button>
+                        {puedeEditar && (
+                          <button
+                            style={styles.btnMail}
+                            onClick={() => confirmarEnviarDoc(doc)}
+                            disabled={enviandoDoc === doc.id}
+                            title="Enviar al correo del cliente"
+                          >
+                            <Mail size={14} /> {enviandoDoc === doc.id ? 'Enviando...' : 'Enviar'}
+                          </button>
+                        )}
                         {puedeBorrar && (
                           <button style={styles.btnTareaEliminar} onClick={() => eliminarDocEtapa(doc)} title="Eliminar">
                             <X size={14} />
@@ -1380,6 +1417,7 @@ const styles = {
   btnSubir: { display: 'inline-block', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: '600', marginBottom: '16px' },
   docCard: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8f9fb', borderRadius: '10px', padding: '14px 16px', marginBottom: '10px', border: '1px solid #eef0f3' },
   btnVer: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#c9a84c20', color: '#c9a84c', border: 'none', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
+  btnMail: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#0984e318', color: '#0984e3', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '12px' },
   btnDescargar: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#0984e320', color: '#0984e3', border: 'none', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' },
   btnDocEliminar: { display: 'flex', alignItems: 'center', backgroundColor: '#d6303120', color: '#d63031', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer' },
   viewerBox: { marginTop: '16px', border: '1px solid #dfe6e9', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#f8f9fa' },

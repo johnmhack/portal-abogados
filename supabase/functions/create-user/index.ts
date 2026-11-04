@@ -2,7 +2,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-supabase-api-version',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 const ALLOWED_ROLES = ['abogado', 'socio', 'asistente', 'contador', 'cliente', 'admin', 'superadmin']
@@ -100,7 +102,7 @@ async function enviarBienvenida(opts: {
   const apiKey = Deno.env.get('RESEND_API_KEY')
   if (!apiKey) return { sent: false, error: 'Falta RESEND_API_KEY' }
 
-  const from = Deno.env.get('RESEND_FROM') || 'SAR Abogados <onboarding@resend.dev>'
+  const from = Deno.env.get('RESEND_FROM') || 'SAR Consultores Integrales <onboarding@resend.dev>'
   const portalUrl = Deno.env.get('PORTAL_URL') || 'https://portal-abogadossar.vercel.app'
   const nombreCompleto = `${opts.nombre} ${opts.apellido || ''}`.trim()
   const rolLabel = ROL_LABEL[opts.rol] || opts.rol
