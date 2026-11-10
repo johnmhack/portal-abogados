@@ -41,8 +41,8 @@ function welcomeHtml(opts: {
   const esCliente = opts.rol === 'cliente'
 
   const titulo = esCliente
-    ? 'Bienvenido al portal de SAR Abogados'
-    : 'Bienvenido al equipo SAR Abogados'
+    ? 'Bienvenido al portal de SAR Consultores Integrales'
+    : 'Bienvenido al equipo SAR Consultores Integrales'
   const intro = esCliente
     ? 'Ya tienes acceso a tu portal de cliente. Desde ahí podrás consultar el avance de tu caso.'
     : 'Ya tienes acceso al portal interno del despacho. Usa estos datos para iniciar sesión.'
@@ -56,7 +56,7 @@ function welcomeHtml(opts: {
         <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:560px;">
           <tr>
             <td style="background:#1a1a2e;padding:28px 32px;">
-              <p style="margin:0;color:#c9a84c;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">SAR Abogados</p>
+              <p style="margin:0;color:#c9a84c;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">SAR Consultores Integrales</p>
               <h1 style="margin:10px 0 0;color:#ffffff;font-size:22px;line-height:1.3;">${titulo}</h1>
             </td>
           </tr>
@@ -116,8 +116,8 @@ async function enviarBienvenida(opts: {
   const nombreCompleto = `${opts.nombre} ${opts.apellido || ''}`.trim()
   const rolLabel = ROL_LABEL[opts.rol] || opts.rol
   const subject = opts.rol === 'cliente'
-    ? 'Bienvenido al portal de SAR Abogados'
-    : `Bienvenido al equipo SAR Abogados (${rolLabel})`
+    ? 'Bienvenido al portal de SAR Consultores Integrales'
+    : `Bienvenido al equipo SAR Consultores Integrales (${rolLabel})`
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { nombre, apellido, email, telefono, rol, client_id, password } = await req.json()
+    const { nombre, apellido, email, telefono, rol, client_id, password, enviar_correo } = await req.json()
 
     if (!nombre || !email) {
       throw new Error('nombre y email son obligatorios')
@@ -168,55 +168,150 @@ Deno.serve(async (req) => {
       throw new Error('Rol no permitido: ' + rolFinal)
     }
 
+    const emailNorm = String(email).trim()
     const pass = password || 'Temporal123!'
+    const debeEnviar = enviar_correo === true || (enviar_correo !== false && rolFinal !== 'cliente')
 
+    async function enviarSiCorresponde() {
+      if (!debeEnviar) return { email_sent: false, email_error: null }
+      try {
+        const result = await enviarBienvenida({
+          nombre,
+          apellido: apellido || '',
+          email: emailNorm,
+          password: pass,
+          rol: rolFinal,
+        })
+        return {
+          email_sent: result.sent,
+          email_error: result.sent ? null : (result.error || 'No se pudo enviar el correo'),
+        }
+      } catch (e) {
+        return { email_sent: false, email_error: e.message }
+      }
+    }
+
+    async function buscarAuthPorEmail() {
+      const needle = emailNorm.toLowerCase()
+      for (let page = 1; page <= 8; page++) {
+        const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 })
+        if (error || !data?.users?.length) return null
+        const found = data.users.find((u) => (u.email || '').trim().toLowerCase() === needle)
+        if (found) return found
+        if (data.users.length < 200) return null
+      }
+      return null
+    }
+
+    async function asegurarPerfil(authId: string) {
+      const { data: porAuth } = await supabaseAdmin
+        .from('users')
+        .select('id, auth_id, email, rol, client_id')
+        .eq('auth_id', authId)
+        .maybeSingle()
+      if (porAuth) {
+        if (rolFinal === 'cliente' && porAuth.rol && porAuth.rol !== 'cliente') {
+          throw new Error('Ese correo ya pertenece a un usuario del despacho.')
+        }
+        const patch: Record<string, unknown> = {}
+        if (client_id && porAuth.client_id !== client_id) patch.client_id = client_id
+        if (emailNorm && porAuth.email !== emailNorm) patch.email = emailNorm
+        if (Object.keys(patch).length) {
+          await supabaseAdmin.from('users').update(patch).eq('id', porAuth.id)
+        }
+        return porAuth
+      }
+
+      const { data: creado, error: profileError } = await supabaseAdmin
+        .from('users')
+        .insert([{
+          auth_id: authId,
+          nombre,
+          apellido,
+          email: emailNorm,
+          telefono,
+          rol: rolFinal,
+          client_id: client_id || null,
+        }])
+        .select('id, auth_id, email, rol, client_id')
+        .single()
+      if (profileError) throw profileError
+      return creado
+    }
+
+    let existente = null
+    if (client_id) {
+      const { data } = await supabaseAdmin
+        .from('users')
+        .select('id, auth_id, email, rol, client_id')
+        .eq('client_id', client_id)
+        .maybeSingle()
+      existente = data
+    }
+    if (!existente && emailNorm) {
+      const { data } = await supabaseAdmin
+        .from('users')
+        .select('id, auth_id, email, rol, client_id')
+        .ilike('email', emailNorm)
+        .limit(1)
+        .maybeSingle()
+      existente = data
+    }
+
+    if (existente) {
+      if (rolFinal === 'cliente' && existente.rol && existente.rol !== 'cliente') {
+        throw new Error('Ese correo ya pertenece a un usuario del despacho.')
+      }
+      if (debeEnviar && existente.auth_id) {
+        const { error: passError } = await supabaseAdmin.auth.admin.updateUserById(existente.auth_id, {
+          password: pass,
+        })
+        if (passError) throw passError
+      }
+      const envio = await enviarSiCorresponde()
+      return new Response(
+        JSON.stringify({
+          success: true,
+          created: false,
+          profile_id: existente.id,
+          ...envio,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    let authUser = null
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
+      email: emailNorm,
       password: pass,
-      email_confirm: true
+      email_confirm: true,
     })
 
-    if (authError) throw authError
-
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('users')
-      .insert([{
-        auth_id: authData.user.id,
-        nombre,
-        apellido,
-        email,
-        telefono,
-        rol: rolFinal,
-        client_id: client_id || null
-      }])
-      .select('id')
-      .single()
-
-    if (profileError) throw profileError
-
-    let email_sent = false
-    let email_error: string | null = null
-    try {
-      const result = await enviarBienvenida({
-        nombre,
-        apellido: apellido || '',
-        email,
-        password: pass,
-        rol: rolFinal,
-      })
-      email_sent = result.sent
-      email_error = result.sent ? null : (result.error || 'No se pudo enviar el correo')
-    } catch (e) {
-      email_error = e.message
+    if (authError) {
+      const yaExiste = /already|registered|exists/i.test(authError.message || '')
+      if (!yaExiste) throw authError
+      authUser = await buscarAuthPorEmail()
+      if (!authUser) throw authError
+      if (debeEnviar) {
+        const { error: passError } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, {
+          password: pass,
+        })
+        if (passError) throw passError
+      }
+    } else {
+      authUser = authData.user
     }
+
+    const profile = await asegurarPerfil(authUser.id)
+    const envio = await enviarSiCorresponde()
 
     return new Response(
       JSON.stringify({
         success: true,
-        user: authData.user,
+        created: !authError,
+        user: authUser,
         profile_id: profile?.id || null,
-        email_sent,
-        email_error,
+        ...envio,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

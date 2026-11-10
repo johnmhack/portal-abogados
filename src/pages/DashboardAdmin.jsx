@@ -966,9 +966,7 @@ function AdminClientes() {
         return
       }
       alert(
-        data.email_sent
-          ? `Acceso creado y correo de bienvenida enviado a ${cliente.correo}.\n\nContraseña: Temporal123!`
-          : `Acceso creado.\n\nCorreo: ${cliente.correo}\nContraseña: Temporal123!\n\nEl correo no se envió${data.email_error ? `: ${data.email_error}` : ''}.`
+        `Acceso creado.\n\nCorreo: ${cliente.correo}\nContraseña: Temporal123!\n\nEl correo de bienvenida se envía desde Clientes → Bienvenida.`
       )
       setClientesConAcceso(prev => new Set([...prev, cliente.id]))
     } catch (e) {

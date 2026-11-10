@@ -17,6 +17,7 @@ export default function Clientes({ userProfile }) {
     correo: '', telefono: '', direccion: '',
     ciudad: '', tipo_persona: 'natural'
   })
+  const [enviandoBienvenida, setEnviandoBienvenida] = useState(null)
 
   const puedeGestionar = puedeGestionarClientes(userProfile?.rol)
   const veContacto = veContactoCliente(userProfile?.rol)
@@ -144,7 +145,19 @@ export default function Clientes({ userProfile }) {
     return
   }
 
-  if (nuevo.crearAcceso && nuevo.correo && clienteCreado) {
+  setModalOpen(false)
+  setNuevo({ nombre: '', apellido: '', documento: '', correo: '', telefono: '', direccion: '', ciudad: '', tipo_persona: 'natural' })
+  fetchClientes()
+}
+
+  const enviarBienvenidaCliente = async (cliente) => {
+    if (!puedeGestionar) return
+    if (!cliente.correo) {
+      alert('El cliente no tiene correo registrado.')
+      return
+    }
+    if (!window.confirm(`¿Enviar correo de bienvenida a ${cliente.nombre} ${cliente.apellido || ''} (${cliente.correo})?\n\nSe enviará la contraseña Temporal123!`)) return
+    setEnviandoBienvenida(cliente.id)
     try {
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
@@ -152,34 +165,32 @@ export default function Clientes({ userProfile }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
           body: JSON.stringify({
-            nombre: clienteCreado.nombre,
-            apellido: clienteCreado.apellido || '',
-            email: clienteCreado.correo,
-            telefono: clienteCreado.telefono || '',
+            nombre: cliente.nombre,
+            apellido: cliente.apellido || '',
+            email: cliente.correo,
+            telefono: cliente.telefono || '',
             rol: 'cliente',
-            client_id: clienteCreado.id
-          })
+            client_id: cliente.id,
+            enviar_correo: true,
+          }),
         }
       )
       const data = await response.json()
-      if (data.error) {
-        alert('Cliente creado pero error al crear acceso: ' + data.error)
-      } else {
-        alert(
-          data.email_sent
-            ? `Cliente creado. Correo de bienvenida enviado a ${clienteCreado.correo}.\nContraseña: Temporal123!`
-            : `Cliente creado con acceso.\n\nCorreo: ${clienteCreado.correo}\nContraseña: Temporal123!\n\nEl correo no se envió.`
-        )
+      if (!response.ok || data.error) {
+        alert('Error: ' + (data.error || 'No se pudo enviar'))
+        return
       }
+      alert(
+        data.email_sent
+          ? `Correo de bienvenida enviado a ${cliente.correo}.\nContraseña: Temporal123!`
+          : `Se creó el acceso, pero el correo no se envió${data.email_error ? `: ${data.email_error}` : ''}.`
+      )
     } catch (e) {
-      alert('Cliente creado pero error: ' + e.message)
+      alert('Error: ' + e.message)
+    } finally {
+      setEnviandoBienvenida(null)
     }
   }
-
-  setModalOpen(false)
-  setNuevo({ nombre: '', apellido: '', documento: '', correo: '', telefono: '', direccion: '', ciudad: '', tipo_persona: 'natural', crearAcceso: false })
-  fetchClientes()
-}
 
 const q = busqueda.trim().toLowerCase()
 const clientesFiltrados = clientes.filter(c => {
@@ -335,13 +346,23 @@ const editarCliente = async () => {
                   </div>
                 </div>
                 {puedeGestionar && (
-                  <button
-                    style={styles.btnEditar}
-                    onClick={() => { setClienteEditar(cliente); setConfirmarEliminar(false); setModalEditar(true) }}
-                    title="Editar cliente"
-                  >
-                    <Pencil size={15} />
-                  </button>
+                  <div style={styles.cardAcciones}>
+                    <button
+                      style={styles.btnBienvenida}
+                      onClick={() => enviarBienvenidaCliente(cliente)}
+                      disabled={enviandoBienvenida === cliente.id}
+                      title="Enviar correo de bienvenida"
+                    >
+                      <Mail size={14} /> {enviandoBienvenida === cliente.id ? 'Enviando...' : 'Bienvenida'}
+                    </button>
+                    <button
+                      style={styles.btnEditar}
+                      onClick={() => { setClienteEditar(cliente); setConfirmarEliminar(false); setModalEditar(true) }}
+                      title="Editar cliente"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  </div>
                 )}
               </div>
             )
@@ -365,19 +386,6 @@ const editarCliente = async () => {
                 <input style={styles.input} placeholder="Nombre *" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} />
                 <input style={styles.input} placeholder="Apellido" value={nuevo.apellido} onChange={e => setNuevo({ ...nuevo, apellido: e.target.value })} />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input
-                  type="checkbox"
-                  id="crearAcceso"
-                  checked={nuevo.crearAcceso || false}
-                  onChange={e => setNuevo({ ...nuevo, crearAcceso: e.target.checked })}
-                  style={{ cursor: 'pointer', width: '16px', height: '16px' }}
-                />
-                <label htmlFor="crearAcceso" style={{ fontSize: '13px', color: '#636e72', cursor: 'pointer' }}>
-                  Crear acceso al portal para este cliente
-                </label>
-              </div>
-
               <input style={styles.input} placeholder="Documento (CC/NIT) *" value={nuevo.documento} onChange={e => setNuevo({ ...nuevo, documento: e.target.value })} />
               <input style={styles.input} placeholder="Correo" type="email" value={nuevo.correo} onChange={e => setNuevo({ ...nuevo, correo: e.target.value })} />
               <input style={styles.input} placeholder="Teléfono" value={nuevo.telefono} onChange={e => setNuevo({ ...nuevo, telefono: e.target.value })} />
@@ -526,6 +534,21 @@ const styles = {
   cardText: { fontSize: '13px', color: '#636e72' },
   cardCiudad: { fontSize: '12px', color: '#8b949e', fontWeight: '500' },
   badge: { padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', flexShrink: 0 },
+  cardAcciones: { display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 },
+  btnBienvenida: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    backgroundColor: '#0984e318',
+    color: '#0984e3',
+    border: 'none',
+    padding: '8px 10px',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '12px',
+    whiteSpace: 'nowrap',
+  },
   overlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 },
   modal: { backgroundColor: '#fff', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' },
   modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },

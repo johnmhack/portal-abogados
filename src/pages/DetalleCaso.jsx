@@ -6,6 +6,7 @@ import InformeCliente from './InformeCliente'
 import HonorariosTab from './HonorariosTab'
 import PartesCaso from '../components/PartesCaso'
 import { puedeEliminar, veContactoCliente, puedeEditarCaso, casoConCandado, veTodoElDespacho, puedeVerHonorarios } from '../lib/permisos'
+import { insertarDocumento } from '../lib/documentos'
 
 export default function DetalleCaso({ casoId, onBack, userProfile, tabInicial = null }) {
   const [caso, setCaso] = useState(null)
@@ -558,13 +559,14 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
     const path = `${casoId}/${stageId}/${Date.now()}_${file.name}`
     const { error: uploadError } = await supabase.storage.from('documentos').upload(path, file)
     if (!uploadError) {
-      await supabase.from('documents').insert([{
+      const { error: dbError } = await insertarDocumento({
         case_id: casoId,
         stage_id: stageId,
         nombre: file.name,
         tipo_documento: file.type,
         url: path
-      }])
+      })
+      if (dbError) alert('No se pudo guardar el documento: ' + dbError.message)
       await fetchTodo()
     }
     setSubiendoStage(null)
@@ -578,14 +580,14 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
     const path = `${casoId}/tareas/${taskId}/${Date.now()}_${file.name}`
     const { error: uploadError } = await supabase.storage.from('documentos').upload(path, file)
     if (!uploadError) {
-      const { error: dbError } = await supabase.from('documents').insert([{
+      const { error: dbError } = await insertarDocumento({
         case_id: casoId,
         stage_id: stageId || null,
         task_id: taskId,
         nombre: file.name,
         tipo_documento: file.type,
         url: path
-      }])
+      })
       if (dbError) {
         alert('Ejecuta en Supabase el SQL documents_task_id.sql.\n' + dbError.message)
       } else {
@@ -1129,14 +1131,14 @@ function TareasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
     const path = `${casoId}/tareas/${task.id}/${Date.now()}_${file.name}`
     const { error: uploadError } = await supabase.storage.from('documentos').upload(path, file)
     if (!uploadError) {
-      const { error: dbError } = await supabase.from('documents').insert([{
+      const { error: dbError } = await insertarDocumento({
         case_id: casoId,
         stage_id: task.stage_id || null,
         task_id: task.id,
         nombre: file.name,
         tipo_documento: file.type,
         url: path
-      }])
+      })
       if (dbError) {
         alert('Ejecuta en Supabase el SQL documents_task_id.sql.\n' + dbError.message)
       } else {
@@ -1274,7 +1276,8 @@ function DocumentosTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
     const path = `${casoId}/${Date.now()}_${file.name}`
     const { error: uploadError } = await supabase.storage.from('documentos').upload(path, file)
     if (!uploadError) {
-      await supabase.from('documents').insert([{ case_id: casoId, nombre: file.name, tipo_documento: file.type, url: path }])
+      const { error: dbError } = await insertarDocumento({ case_id: casoId, nombre: file.name, tipo_documento: file.type, url: path })
+      if (dbError) alert('No se pudo guardar el documento: ' + dbError.message)
       fetchDocumentos()
     }
     setSubiendo(false)

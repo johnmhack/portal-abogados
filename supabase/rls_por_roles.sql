@@ -252,14 +252,7 @@ create policy cases_delete on public.cases
 -- documents
 create policy documents_select on public.documents
   for select to authenticated
-  using (
-    public.can_access_case(case_id)
-    and (
-      public.is_staff()
-      or public.is_admin()
-      or coalesce(visible_cliente, false) = true
-    )
-  );
+  using (public.can_access_case(case_id));
 
 create policy documents_write on public.documents
   for all to authenticated

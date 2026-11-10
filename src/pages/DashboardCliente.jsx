@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import logo from '../assets/LOGO_RUBY_RAMOS_SIMBOLO.svg'
 import {
-  LayoutDashboard, Briefcase, FileText, MessageSquare, Calendar,
-  LogOut, Menu, X, CheckCircle, Clock, Loader, XCircle, Download, Send, TrendingUp
+  LayoutDashboard, Briefcase, FileText, Calendar,
+  LogOut, Menu, X, CheckCircle, Clock, Loader, XCircle, Download, TrendingUp
 } from 'lucide-react'
 import NotificacionesCampana from '../components/NotificacionesCampana'
 
@@ -14,7 +14,10 @@ const STATUS_COLOR = {
 
 export default function DashboardCliente({ session, userProfile }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [activePage, setActivePage] = useState(() => sessionStorage.getItem('sar_cliente_page') || 'inicio')
+  const [activePage, setActivePage] = useState(() => {
+    const saved = sessionStorage.getItem('sar_cliente_page')
+    return saved && saved !== 'mensajes' ? saved : 'inicio'
+  })
   const [caso, setCaso] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -49,7 +52,6 @@ export default function DashboardCliente({ session, userProfile }) {
     { id: 'caso', label: 'Mi Caso', icon: Briefcase },
     { id: 'documentos', label: 'Documentos', icon: FileText },
     { id: 'audiencias', label: 'Audiencias', icon: Calendar },
-    { id: 'mensajes', label: 'Mensajes', icon: MessageSquare },
   ]
 
   const hora = new Date().getHours()
@@ -62,7 +64,6 @@ export default function DashboardCliente({ session, userProfile }) {
     caso: 'Estado y etapas de tu proceso',
     documentos: 'Archivos compartidos contigo',
     audiencias: 'Citas y citaciones',
-    mensajes: 'Comunicación con el despacho',
   }
 
   const sinVinculo = !loading && !userProfile?.client_id
@@ -190,17 +191,12 @@ export default function DashboardCliente({ session, userProfile }) {
               {activePage === 'documentos' && (
                 sinCaso
                   ? <EstadoVacio titulo="Sin documentos" texto="Los documentos aparecerán cuando tengas un caso asignado." />
-                  : <DocumentosTab casoId={caso.id} />
+                  : <DocumentosTab casoId={caso.id} clientId={userProfile.client_id} />
               )}
               {activePage === 'audiencias' && (
                 sinCaso
                   ? <EstadoVacio titulo="Sin audiencias" texto="Las citas de tu caso aparecerán aquí." />
                   : <AudienciasCliente casoId={caso.id} />
-              )}
-              {activePage === 'mensajes' && (
-                sinCaso
-                  ? <EstadoVacio titulo="Sin mensajes" texto="Podrás escribir al despacho cuando tengas un caso asignado." />
-                  : <MensajesTab casoId={caso.id} session={session} />
               )}
             </>
           )}
@@ -379,17 +375,46 @@ function ProcesoTab({ casoId }) {
   )
 }
 
-function DocumentosTab({ casoId }) {
+function DocumentosTab({ casoId, clientId }) {
   const [documentos, setDocumentos] = useState([])
+  const [casosTitulo, setCasosTitulo] = useState({})
+  const [errorCarga, setErrorCarga] = useState('')
 
-  useEffect(() => { fetchDocumentos() }, [casoId])
+  useEffect(() => { fetchDocumentos() }, [casoId, clientId])
 
   const fetchDocumentos = async () => {
-    const { data } = await supabase
+    setErrorCarga('')
+    let caseIds = casoId ? [casoId] : []
+    const titulos = {}
+
+    if (clientId) {
+      const { data: casos } = await supabase
+        .from('cases')
+        .select('id, titulo')
+        .eq('client_id', clientId)
+      if (casos?.length) {
+        caseIds = casos.map(c => c.id)
+        casos.forEach(c => { titulos[c.id] = c.titulo })
+      }
+    }
+
+    setCasosTitulo(titulos)
+    if (!caseIds.length) {
+      setDocumentos([])
+      return
+    }
+
+    const { data, error } = await supabase
       .from('documents')
       .select('*')
-      .eq('case_id', casoId)
-      .eq('visible_cliente', true)
+      .in('case_id', caseIds)
+      .order('creado_en', { ascending: false })
+
+    if (error) {
+      setDocumentos([])
+      setErrorCarga('No se pudieron cargar los documentos. Avisa al despacho.')
+      return
+    }
     setDocumentos(data || [])
   }
 
@@ -407,7 +432,12 @@ function DocumentosTab({ casoId }) {
 
   return (
     <div style={styles.panel}>
-      {documentos.length === 0 ? (
+      {errorCarga ? (
+        <div style={styles.empty}>
+          <FileText size={40} color="#dfe6e9" />
+          <p style={{ color: '#b2bec3', marginTop: '12px' }}>{errorCarga}</p>
+        </div>
+      ) : documentos.length === 0 ? (
         <div style={styles.empty}>
           <FileText size={40} color="#dfe6e9" />
           <p style={{ color: '#b2bec3', marginTop: '12px' }}>No hay documentos disponibles aún</p>
@@ -415,7 +445,17 @@ function DocumentosTab({ casoId }) {
       ) : (
         documentos.map(doc => (
           <div key={doc.id} style={styles.docRow}>
-            <span style={{ fontSize: '14px', color: '#2d3436' }}>{doc.nombre}</span>
+            <div>
+              <p style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a2e', margin: 0 }}>{doc.nombre}</p>
+              <p style={{ fontSize: '12px', color: '#8b949e', margin: '4px 0 0' }}>
+                {doc.creado_en
+                  ? new Date(doc.creado_en).toLocaleDateString('es-CO', { dateStyle: 'medium' })
+                  : 'Sin fecha'}
+                {Object.keys(casosTitulo).length > 1 && casosTitulo[doc.case_id]
+                  ? ` · ${casosTitulo[doc.case_id]}`
+                  : ''}
+              </p>
+            </div>
             <button style={styles.btnDescargar} onClick={() => descargar(doc)}>
               <Download size={14} /> Descargar
             </button>
@@ -473,77 +513,6 @@ function AudienciasCliente({ casoId }) {
           )
         })
       )}
-    </div>
-  )
-}
-
-function MensajesTab({ casoId, session }) {
-  const [mensajes, setMensajes] = useState([])
-  const [nuevo, setNuevo] = useState('')
-
-  useEffect(() => { fetchMensajes() }, [casoId])
-
-  const fetchMensajes = async () => {
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('case_id', casoId)
-      .order('creado_en', { ascending: true })
-    setMensajes(data || [])
-  }
-
-  const enviar = async () => {
-    if (!nuevo.trim()) return
-    await supabase.from('messages').insert([{
-      case_id: casoId,
-      remitente_id: session.user.id,
-      contenido: nuevo,
-    }])
-    setNuevo('')
-    fetchMensajes()
-  }
-
-  return (
-    <div style={{ ...styles.panel, display: 'flex', flexDirection: 'column', minHeight: '420px' }}>
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
-        {mensajes.length === 0 ? (
-          <div style={styles.empty}>
-            <MessageSquare size={40} color="#dfe6e9" />
-            <p style={{ color: '#b2bec3', marginTop: '12px' }}>No hay mensajes aún</p>
-          </div>
-        ) : (
-          mensajes.map(m => {
-            const esMio = m.remitente_id === session.user.id
-            return (
-              <div
-                key={m.id}
-                style={{
-                  alignSelf: esMio ? 'flex-end' : 'flex-start',
-                  maxWidth: '70%',
-                  backgroundColor: esMio ? '#1a1a2e' : '#f0f2f5',
-                  padding: '10px 14px',
-                  borderRadius: '12px',
-                }}
-              >
-                <p style={{ fontSize: '14px', color: esMio ? '#c9a84c' : '#2d3436', marginBottom: '4px' }}>{m.contenido}</p>
-                <span style={{ fontSize: '11px', color: esMio ? '#a0aec0' : '#b2bec3' }}>
-                  {new Date(m.creado_en).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            )
-          })
-        )}
-      </div>
-      <div style={{ display: 'flex', gap: '12px' }}>
-        <input
-          style={styles.input}
-          placeholder="Escribe un mensaje..."
-          value={nuevo}
-          onChange={e => setNuevo(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && enviar()}
-        />
-        <button style={styles.btnEnviar} onClick={enviar}><Send size={18} /></button>
-      </div>
     </div>
   )
 }
@@ -683,13 +652,5 @@ const styles = {
     display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#0984e320',
     color: '#0984e3', border: 'none', padding: '6px 14px', borderRadius: '6px',
     cursor: 'pointer', fontWeight: '600', fontSize: '13px',
-  },
-  input: {
-    flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9',
-    fontSize: '14px', outline: 'none',
-  },
-  btnEnviar: {
-    backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none',
-    padding: '10px 16px', borderRadius: '8px', cursor: 'pointer',
   },
 }
