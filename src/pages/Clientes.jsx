@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { Plus, Search, Users, X, Phone, Mail, Pencil } from 'lucide-react'
+import { Plus, Search, Users, X, Phone, Mail, Pencil, KeyRound } from 'lucide-react'
 import { puedeEliminar, veTodoElDespacho, puedeGestionarClientes, veContactoCliente } from '../lib/permisos'
 
 export default function Clientes({ userProfile }) {
@@ -18,6 +18,7 @@ export default function Clientes({ userProfile }) {
     ciudad: '', tipo_persona: 'natural'
   })
   const [enviandoBienvenida, setEnviandoBienvenida] = useState(null)
+  const [resetPasswordId, setResetPasswordId] = useState(null)
 
   const puedeGestionar = puedeGestionarClientes(userProfile?.rol)
   const veContacto = veContactoCliente(userProfile?.rol)
@@ -251,6 +252,52 @@ export default function Clientes({ userProfile }) {
       alert('Error: ' + e.message)
     } finally {
       setEnviandoBienvenida(null)
+    }
+  }
+
+  const restablecerPasswordTemporal = async (cliente) => {
+    if (!puedeGestionar) return
+    if (!cliente.correo) {
+      alert('El cliente no tiene correo registrado.')
+      return
+    }
+    const ok = window.confirm(
+      `¿Restablecer la contraseña de ${cliente.nombre} ${cliente.apellido || ''} a Temporal123!?\n\nSi el cliente ya la había cambiado, dejará de funcionar hasta que use de nuevo Temporal123! o la actualice en Mi perfil.`
+    )
+    if (!ok) return
+    setResetPasswordId(cliente.id)
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({
+            nombre: cliente.nombre,
+            apellido: cliente.apellido || '',
+            email: cliente.correo,
+            telefono: cliente.telefono || '',
+            rol: 'cliente',
+            client_id: cliente.id,
+            enviar_correo: false,
+            forzar_reset: true,
+          }),
+        }
+      )
+      const data = await response.json()
+      if (!response.ok || data.error) {
+        alert('Error: ' + (data.error || 'No se pudo restablecer la contraseña'))
+        return
+      }
+      if (!data.password_reset) {
+        alert('No se encontró el acceso de este cliente. Primero crea el acceso o envía la bienvenida.')
+        return
+      }
+      alert(`Contraseña restablecida.\nCorreo: ${cliente.correo}\nNueva clave: Temporal123!\n\nEl cliente puede cambiarla en el portal: Mi perfil.`)
+    } catch (e) {
+      alert('Error: ' + e.message)
+    } finally {
+      setResetPasswordId(null)
     }
   }
 
@@ -489,6 +536,19 @@ const editarCliente = async () => {
               <input style={styles.input} placeholder="Ciudad" value={clienteEditar.ciudad || ''} onChange={e => setClienteEditar({ ...clienteEditar, ciudad: e.target.value })} />
               <input style={styles.input} placeholder="Dirección" value={clienteEditar.direccion || ''} onChange={e => setClienteEditar({ ...clienteEditar, direccion: e.target.value })} />
               <button style={styles.btnGuardar} onClick={editarCliente}>Guardar Cambios</button>
+              {clienteEditar.correo && (
+                <button
+                  type="button"
+                  style={styles.btnPassword}
+                  onClick={() => restablecerPasswordTemporal(clienteEditar)}
+                  disabled={resetPasswordId === clienteEditar.id}
+                >
+                  <KeyRound size={16} />
+                  {resetPasswordId === clienteEditar.id
+                    ? 'Restableciendo...'
+                    : 'Actualizar contraseña a Temporal123!'}
+                </button>
+              )}
 
               {puedeEliminar(userProfile?.rol) && (!confirmarEliminar ? (
                 <button style={styles.btnEliminar} onClick={() => setConfirmarEliminar(true)}>
@@ -650,6 +710,11 @@ const styles = {
   row: { display: 'flex', gap: '12px' },
   input: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #dfe6e9', fontSize: '14px', outline: 'none', width: '100%', boxSizing: 'border-box' },
   btnGuardar: { backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '15px' },
+  btnPassword: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+    backgroundColor: '#fff', color: '#1a1a2e', border: '1px solid #dfe6e9',
+    padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '14px',
+  },
   btnEditar: {
     display: 'flex',
     alignItems: 'center',

@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import logo from '../assets/LOGO_RUBY_RAMOS_SIMBOLO.svg'
 import {
-  LayoutDashboard, Briefcase, FileText, Calendar,
+  LayoutDashboard, Briefcase, FileText, Calendar, User,
   LogOut, Menu, X, CheckCircle, Clock, Loader, XCircle, Download, TrendingUp
 } from 'lucide-react'
 import NotificacionesCampana from '../components/NotificacionesCampana'
+import FormularioPassword from '../components/FormularioPassword'
 
 const STATUS_COLOR = {
   activo: '#0984e3', en_proceso: '#c9a84c', audiencia: '#6c5ce7',
@@ -52,6 +53,7 @@ export default function DashboardCliente({ session, userProfile }) {
     { id: 'caso', label: 'Mi Caso', icon: Briefcase },
     { id: 'documentos', label: 'Documentos', icon: FileText },
     { id: 'audiencias', label: 'Audiencias', icon: Calendar },
+    { id: 'perfil', label: 'Mi perfil', icon: User },
   ]
 
   const hora = new Date().getHours()
@@ -64,6 +66,7 @@ export default function DashboardCliente({ session, userProfile }) {
     caso: 'Estado y etapas de tu proceso',
     documentos: 'Archivos compartidos contigo',
     audiencias: 'Citas y citaciones',
+    perfil: 'Datos de acceso y contraseña',
   }
 
   const sinVinculo = !loading && !userProfile?.client_id
@@ -168,6 +171,8 @@ export default function DashboardCliente({ session, userProfile }) {
             <div style={styles.estadoCard}>
               <p style={{ color: '#b2bec3', margin: 0 }}>Cargando tu información...</p>
             </div>
+          ) : activePage === 'perfil' ? (
+            <PerfilCliente session={session} userProfile={userProfile} />
           ) : sinVinculo ? (
             <EstadoVacio
               titulo="Cuenta pendiente de vincular"
@@ -202,6 +207,23 @@ export default function DashboardCliente({ session, userProfile }) {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function PerfilCliente({ session, userProfile }) {
+  const correo = userProfile?.email || session?.user?.email || ''
+  return (
+    <div style={styles.panel}>
+      <p style={{ margin: '0 0 6px', fontSize: '12px', color: '#c9a84c', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+        Acceso al portal
+      </p>
+      <h2 style={{ margin: '0 0 8px', fontSize: '20px', color: '#1a1a2e' }}>Actualizar contraseña</h2>
+      <p style={{ margin: '0 0 20px', fontSize: '14px', color: '#636e72', lineHeight: 1.5 }}>
+        Si entraste con <strong>Temporal123!</strong>, cámbiala aquí. La nueva contraseña queda en tu cuenta de acceso y sirve en el siguiente inicio de sesión.
+      </p>
+      <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#8b949e' }}>Correo: {correo}</p>
+      <FormularioPassword email={correo} />
     </div>
   )
 }

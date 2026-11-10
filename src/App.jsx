@@ -4,11 +4,20 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import DashboardAdmin from './pages/DashboardAdmin'
 import DashboardCliente from './pages/DashboardCliente'
+import FormularioPassword from './components/FormularioPassword'
+
+function esRecuperacion() {
+  if (typeof window === 'undefined') return false
+  const hash = window.location.hash || ''
+  const search = window.location.search || ''
+  return hash.includes('type=recovery') || search.includes('type=recovery')
+}
 
 function App() {
   const [session, setSession] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [recuperandoClave, setRecuperandoClave] = useState(() => esRecuperacion())
   const profileLoaded = useRef(false)
 
   useEffect(() => {
@@ -38,6 +47,11 @@ function App() {
       if (!mounted) return
       setSession(session)
 
+      if (event === 'PASSWORD_RECOVERY') {
+        setRecuperandoClave(true)
+        return
+      }
+
       // Al volver a la pestaña Supabase refresca el token; no recargar toda la app
       if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return
 
@@ -66,6 +80,36 @@ function App() {
   )
 
   if (!session) return <Login />
+
+  if (recuperandoClave) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        backgroundColor: '#f5f6fa', padding: '24px',
+      }}>
+        <div style={{
+          background: '#fff', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '440px',
+          boxShadow: '0 8px 30px rgba(26,26,46,0.08)', border: '1px solid #eef0f3',
+        }}>
+          <p style={{ margin: '0 0 6px', fontSize: '12px', color: '#c9a84c', fontWeight: 700, letterSpacing: '0.08em' }}>
+            SAR CONSULTORES INTEGRALES
+          </p>
+          <h1 style={{ margin: '0 0 8px', fontSize: '22px', color: '#1a1a2e' }}>Nueva contraseña</h1>
+          <p style={{ margin: '0 0 20px', fontSize: '14px', color: '#636e72' }}>
+            Elige una contraseña distinta a Temporal123!. Con ella entrarás al portal.
+          </p>
+          <FormularioPassword
+            email={session.user.email}
+            modoRecuperacion
+            onListo={() => {
+              window.history.replaceState({}, document.title, window.location.pathname)
+              setRecuperandoClave(false)
+            }}
+          />
+        </div>
+      </div>
+    )
+  }
 
   if (!userProfile) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f6fa' }}>

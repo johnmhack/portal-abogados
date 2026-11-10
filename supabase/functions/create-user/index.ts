@@ -202,6 +202,15 @@ Deno.serve(async (req) => {
       if (!cliErr) bienvenidaPrevia = cli?.bienvenida_enviada_en || null
     }
 
+    async function aplicarPassword(authId: string | null | undefined) {
+      if (!authId) return false
+      const { error: passError } = await supabaseAdmin.auth.admin.updateUserById(authId, {
+        password: pass,
+      })
+      if (passError) throw passError
+      return true
+    }
+
     if (debeEnviar && bienvenidaPrevia && !forzarReset) {
       return new Response(
         JSON.stringify({
@@ -305,11 +314,34 @@ Deno.serve(async (req) => {
       if (rolFinal === 'cliente' && existente.rol && existente.rol !== 'cliente') {
         throw new Error('Ese correo ya pertenece a un usuario del despacho.')
       }
-      if (debeEnviar && existente.auth_id) {
-        const { error: passError } = await supabaseAdmin.auth.admin.updateUserById(existente.auth_id, {
-          password: pass,
-        })
-        if (passError) throw passError
+      const debeResetear = debeEnviar || forzarReset
+      let password_reset = false
+      if (debeResetear) {
+        let authId = existente.auth_id
+        if (!authId) {
+          const authUserExistente = await buscarAuthPorEmail()
+          authId = authUserExistente?.id || null
+          if (authId) {
+            await supabaseAdmin.from('users').update({ auth_id: authId }).eq('id', existente.id)
+          }
+        }
+        password_reset = await aplicarPassword(authId)
+        if (debeResetear && !password_reset) {
+          throw new Error('No se encontró el usuario de acceso para restablecer la contraseña.')
+        }
+      }
+      if (!debeEnviar && forzarReset) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            created: false,
+            profile_id: existente.id,
+            password_reset,
+            email_sent: false,
+            bienvenida_enviada_en: bienvenidaPrevia,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
       const envio = await enviarSiCorresponde()
       const stamp = envio.email_sent ? await marcarBienvenida() : null
@@ -318,6 +350,7 @@ Deno.serve(async (req) => {
           success: true,
           created: false,
           profile_id: existente.id,
+          password_reset,
           bienvenida_enviada_en: stamp || (envio.email_sent ? new Date().toISOString() : bienvenidaPrevia),
           stamp_ok: Boolean(stamp),
           ...envio,
@@ -338,11 +371,8 @@ Deno.serve(async (req) => {
       if (!yaExiste) throw authError
       authUser = await buscarAuthPorEmail()
       if (!authUser) throw authError
-      if (debeEnviar) {
-        const { error: passError } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, {
-          password: pass,
-        })
-        if (passError) throw passError
+      if (debeEnviar || forzarReset) {
+        await aplicarPassword(authUser.id)
       }
     } else {
       authUser = authData.user
