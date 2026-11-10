@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { nombre, apellido, email, telefono, rol, client_id, password, enviar_correo } = await req.json()
+    const { nombre, apellido, email, telefono, rol, client_id, password, enviar_correo, forzar_reset } = await req.json()
 
     if (!nombre || !email) {
       throw new Error('nombre y email son obligatorios')
@@ -171,6 +171,49 @@ Deno.serve(async (req) => {
     const emailNorm = String(email).trim()
     const pass = password || 'Temporal123!'
     const debeEnviar = enviar_correo === true || (enviar_correo !== false && rolFinal !== 'cliente')
+    const forzarReset = forzar_reset === true
+
+    async function marcarBienvenida() {
+      if (!client_id || !debeEnviar) return null
+      const { data: rpcFecha, error: rpcError } = await supabaseAdmin.rpc(
+        'marcar_bienvenida_cliente',
+        { p_client_id: client_id },
+      )
+      if (!rpcError && rpcFecha) return rpcFecha as string
+
+      const cuando = new Date().toISOString()
+      const { data: row, error } = await supabaseAdmin
+        .from('clients')
+        .update({ bienvenida_enviada_en: cuando })
+        .eq('id', client_id)
+        .select('bienvenida_enviada_en')
+        .maybeSingle()
+      if (error) console.error('marcarBienvenida', error.message, rpcError?.message)
+      return row?.bienvenida_enviada_en || null
+    }
+
+    let bienvenidaPrevia: string | null = null
+    if (client_id) {
+      const { data: cli, error: cliErr } = await supabaseAdmin
+        .from('clients')
+        .select('id, bienvenida_enviada_en')
+        .eq('id', client_id)
+        .maybeSingle()
+      if (!cliErr) bienvenidaPrevia = cli?.bienvenida_enviada_en || null
+    }
+
+    if (debeEnviar && bienvenidaPrevia && !forzarReset) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          already_sent: true,
+          email_sent: false,
+          bienvenida_enviada_en: bienvenidaPrevia,
+          email_error: 'La bienvenida ya se envió. Confirma si quieres reenviar y restablecer la contraseña.',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     async function enviarSiCorresponde() {
       if (!debeEnviar) return { email_sent: false, email_error: null }
@@ -269,11 +312,14 @@ Deno.serve(async (req) => {
         if (passError) throw passError
       }
       const envio = await enviarSiCorresponde()
+      const stamp = envio.email_sent ? await marcarBienvenida() : null
       return new Response(
         JSON.stringify({
           success: true,
           created: false,
           profile_id: existente.id,
+          bienvenida_enviada_en: stamp || (envio.email_sent ? new Date().toISOString() : bienvenidaPrevia),
+          stamp_ok: Boolean(stamp),
           ...envio,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -304,6 +350,7 @@ Deno.serve(async (req) => {
 
     const profile = await asegurarPerfil(authUser.id)
     const envio = await enviarSiCorresponde()
+    const stamp = envio.email_sent ? await marcarBienvenida() : null
 
     return new Response(
       JSON.stringify({
@@ -311,6 +358,8 @@ Deno.serve(async (req) => {
         created: !authError,
         user: authUser,
         profile_id: profile?.id || null,
+        bienvenida_enviada_en: stamp || (envio.email_sent ? new Date().toISOString() : bienvenidaPrevia),
+        stamp_ok: Boolean(stamp),
         ...envio,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

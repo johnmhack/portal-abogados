@@ -25,14 +25,27 @@ export default function Clientes({ userProfile }) {
   useEffect(() => { fetchClientes() }, [])
 
   const fetchClientes = async () => {
+    const filtrarAbogado = (q) => {
+      if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
+        return q.eq('abogado_id', userProfile.id)
+      }
+      return q
+    }
     const cols = veContactoCliente(userProfile?.rol)
       ? '*'
-      : 'id, nombre, apellido, documento, ciudad, tipo_persona, abogado_id, creado_en'
-    let query = supabase.from('clients').select(cols).order('creado_en', { ascending: false })
-    if (userProfile?.id && !veTodoElDespacho(userProfile?.rol)) {
-      query = query.eq('abogado_id', userProfile.id)
+      : 'id, nombre, apellido, documento, ciudad, tipo_persona, abogado_id, creado_en, bienvenida_enviada_en'
+    let { data, error } = await filtrarAbogado(
+      supabase.from('clients').select(cols).order('creado_en', { ascending: false })
+    )
+    if (error) {
+      console.error('fetchClientes', error)
+      const fallback = await filtrarAbogado(
+        supabase.from('clients').select('*').order('creado_en', { ascending: false })
+      )
+      data = fallback.data
+      error = fallback.error
     }
-    const { data } = await query
+    if (error) console.error('fetchClientes fallback', error)
     setClientes(data || [])
     setLoading(false)
   }
@@ -150,32 +163,58 @@ export default function Clientes({ userProfile }) {
   fetchClientes()
 }
 
+  const fechaBienvenida = (iso) => {
+    if (!iso) return ''
+    return new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  }
+
   const enviarBienvenidaCliente = async (cliente) => {
     if (!puedeGestionar) return
     if (!cliente.correo) {
       alert('El cliente no tiene correo registrado.')
       return
     }
-    if (!window.confirm(`¿Enviar correo de bienvenida a ${cliente.nombre} ${cliente.apellido || ''} (${cliente.correo})?\n\nSe enviará la contraseña Temporal123!`)) return
+    let forzarReset = false
+    if (cliente.bienvenida_enviada_en) {
+      const ok = window.confirm(
+        `Ya se envió la bienvenida el ${fechaBienvenida(cliente.bienvenida_enviada_en)}.\n\nSi reenvías, la contraseña volverá a Temporal123! y el cliente no podrá entrar con la que haya cambiado.\n\n¿Reenviar de todas formas?`
+      )
+      if (!ok) return
+      forzarReset = true
+    } else if (!window.confirm(`¿Enviar correo de bienvenida a ${cliente.nombre} ${cliente.apellido || ''} (${cliente.correo})?\n\nSe enviará la contraseña Temporal123!`)) {
+      return
+    }
     setEnviandoBienvenida(cliente.id)
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-          body: JSON.stringify({
-            nombre: cliente.nombre,
-            apellido: cliente.apellido || '',
-            email: cliente.correo,
-            telefono: cliente.telefono || '',
-            rol: 'cliente',
-            client_id: cliente.id,
-            enviar_correo: true,
-          }),
-        }
-      )
-      const data = await response.json()
+      const llamar = async (forzar) => {
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+            body: JSON.stringify({
+              nombre: cliente.nombre,
+              apellido: cliente.apellido || '',
+              email: cliente.correo,
+              telefono: cliente.telefono || '',
+              rol: 'cliente',
+              client_id: cliente.id,
+              enviar_correo: true,
+              forzar_reset: forzar,
+            }),
+          }
+        )
+        return { response, data: await response.json() }
+      }
+
+      let { response, data } = await llamar(forzarReset)
+      if (data.already_sent && !forzarReset) {
+        const ok = window.confirm(
+          `Ya se envió la bienvenida el ${fechaBienvenida(data.bienvenida_enviada_en)}.\n\nReenviar restablece la contraseña a Temporal123!. ¿Continuar?`
+        )
+        if (!ok) return
+        ;({ response, data } = await llamar(true))
+      }
       if (!response.ok || data.error) {
         alert('Error: ' + (data.error || 'No se pudo enviar'))
         return
@@ -185,6 +224,29 @@ export default function Clientes({ userProfile }) {
           ? `Correo de bienvenida enviado a ${cliente.correo}.\nContraseña: Temporal123!`
           : `Se creó el acceso, pero el correo no se envió${data.email_error ? `: ${data.email_error}` : ''}.`
       )
+      if (data.email_sent) {
+        let cuando = data.bienvenida_enviada_en || new Date().toISOString()
+        if (!data.stamp_ok) {
+          const { data: rpcFecha, error: stampError } = await supabase.rpc(
+            'marcar_bienvenida_cliente',
+            { p_client_id: cliente.id }
+          )
+          if (stampError) {
+            console.error('No se pudo guardar bienvenida_enviada_en', stampError)
+            alert(
+              'El correo salió, pero no se guardó la marca de bienvenida:\n' +
+              stampError.message +
+              '\n\nVuelve a ejecutar supabase/bienvenida_enviada.sql en el SQL Editor (incluye la función marcar_bienvenida_cliente) y recarga esta página.'
+            )
+          } else if (rpcFecha) {
+            cuando = rpcFecha
+          }
+        }
+        setClientes((prev) => prev.map((c) =>
+          c.id === cliente.id ? { ...c, bienvenida_enviada_en: cuando } : c
+        ))
+        await fetchClientes()
+      }
     } catch (e) {
       alert('Error: ' + e.message)
     } finally {
@@ -343,17 +405,26 @@ const editarCliente = async () => {
                     {cliente.ciudad && (
                       <span style={styles.cardCiudad}>{cliente.ciudad}</span>
                     )}
+                    {cliente.bienvenida_enviada_en && (
+                      <span style={styles.badgeBienvenida}>
+                        Bienvenida {fechaBienvenida(cliente.bienvenida_enviada_en)}
+                      </span>
+                    )}
                   </div>
                 </div>
                 {puedeGestionar && (
                   <div style={styles.cardAcciones}>
                     <button
-                      style={styles.btnBienvenida}
+                      style={cliente.bienvenida_enviada_en ? styles.btnReenviar : styles.btnBienvenida}
                       onClick={() => enviarBienvenidaCliente(cliente)}
                       disabled={enviandoBienvenida === cliente.id}
-                      title="Enviar correo de bienvenida"
+                      title={cliente.bienvenida_enviada_en
+                        ? 'Ya se envió. Reenviar restablece la contraseña temporal.'
+                        : 'Enviar correo de bienvenida'}
                     >
-                      <Mail size={14} /> {enviandoBienvenida === cliente.id ? 'Enviando...' : 'Bienvenida'}
+                      <Mail size={14} /> {enviandoBienvenida === cliente.id
+                        ? 'Enviando...'
+                        : (cliente.bienvenida_enviada_en ? 'Reenviar' : 'Bienvenida')}
                     </button>
                     <button
                       style={styles.btnEditar}
@@ -533,6 +604,28 @@ const styles = {
   cardDetail: { display: 'flex', alignItems: 'center', gap: '6px' },
   cardText: { fontSize: '13px', color: '#636e72' },
   cardCiudad: { fontSize: '12px', color: '#8b949e', fontWeight: '500' },
+  badgeBienvenida: {
+    fontSize: '11px',
+    fontWeight: '700',
+    color: '#00b894',
+    backgroundColor: '#00b89418',
+    padding: '3px 8px',
+    borderRadius: '20px',
+  },
+  btnReenviar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    backgroundColor: '#f0f2f5',
+    color: '#636e72',
+    border: 'none',
+    padding: '8px 10px',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '12px',
+    whiteSpace: 'nowrap',
+  },
   badge: { padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', flexShrink: 0 },
   cardAcciones: { display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 },
   btnBienvenida: {
