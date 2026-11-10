@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { ArrowLeft, FileText, MessageSquare, Plus, X, TrendingUp, CheckSquare, Pencil, Eye, Download, Trash2, Wallet, Mail } from 'lucide-react'
-import { notificarDocumentoCliente } from '../lib/notifyDocument'
+import { notificarDocumentoCliente, notificarActuacionCliente } from '../lib/notifyDocument'
 import InformeCliente from './InformeCliente'
 import HonorariosTab from './HonorariosTab'
 import PartesCaso from '../components/PartesCaso'
@@ -478,6 +478,8 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
   const [subiendoTarea, setSubiendoTarea] = useState(null)
   const [enviandoDoc, setEnviandoDoc] = useState(null)
   const [vistaDoc, setVistaDoc] = useState(null)
+  const [modalEnviar, setModalEnviar] = useState(null)
+  const [envioSel, setEnvioSel] = useState({ nota: false, tareas: {}, docs: {} })
 
   useEffect(() => { fetchTodo() }, [casoId])
   useEffect(() => () => { if (vistaDoc?.url) URL.revokeObjectURL(vistaDoc.url) }, [vistaDoc])
@@ -556,17 +558,14 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
     const path = `${casoId}/${stageId}/${Date.now()}_${file.name}`
     const { error: uploadError } = await supabase.storage.from('documentos').upload(path, file)
     if (!uploadError) {
-      const { data: creado } = await supabase.from('documents').insert([{
+      await supabase.from('documents').insert([{
         case_id: casoId,
         stage_id: stageId,
         nombre: file.name,
         tipo_documento: file.type,
         url: path
-      }]).select('id').single()
+      }])
       await fetchTodo()
-      if (creado?.id && window.confirm(`Documento guardado.\n¿Enviarlo ahora al correo del cliente?`)) {
-        await enviarDocAlCliente({ ...creado, nombre: file.name, case_id: casoId, url: path })
-      }
     }
     setSubiendoStage(null)
     e.target.value = ''
@@ -633,9 +632,57 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
     }
   }
 
-  const confirmarEnviarDoc = (doc) => {
-    if (!window.confirm(`¿Enviar "${doc.nombre}" al correo del cliente?`)) return
-    enviarDocAlCliente(doc)
+  const abrirModalEnviar = (etapa) => {
+    setModalEnviar(etapa)
+    setEnvioSel({ nota: false, tareas: {}, docs: {} })
+  }
+
+  const toggleEnvioDoc = (docId) => {
+    setEnvioSel((prev) => ({ ...prev, docs: { ...prev.docs, [docId]: !prev.docs[docId] } }))
+  }
+
+  const toggleEnvioTarea = (tareaId) => {
+    setEnvioSel((prev) => ({ ...prev, tareas: { ...prev.tareas, [tareaId]: !prev.tareas[tareaId] } }))
+  }
+
+  const enviarSeleccionEtapa = async () => {
+    if (!modalEnviar) return
+    const docsEtapa = docsPorEtapa[modalEnviar.id] || []
+    const tareas = tareasPorEtapa[modalEnviar.id] || []
+    const docsElegidos = [
+      ...docsEtapa.filter((d) => envioSel.docs[d.id]),
+      ...tareas.flatMap((t) => (docsPorTarea[t.id] || []).filter((d) => envioSel.docs[d.id])),
+    ]
+    const eligioNota = envioSel.nota && !!(modalEnviar.notas || '').trim()
+    const eligioTarea = tareas.some((t) => envioSel.tareas[t.id])
+
+    if (!docsElegidos.length && !eligioNota && !eligioTarea) {
+      alert('Selecciona al menos un documento, una nota o una tarea.')
+      return
+    }
+
+    setEnviandoDoc(modalEnviar.id)
+    try {
+      const res = await notificarActuacionCliente({
+        caseId: casoId,
+        stageId: modalEnviar.id,
+        documentIds: docsElegidos.map((d) => d.id),
+        nota: eligioNota ? modalEnviar.notas : null,
+        tareas: tareas.filter((t) => envioSel.tareas[t.id]).map((t) => t.titulo),
+      })
+      const omitidos = res.omitted?.length ? `\nNo se adjuntaron por tamaño: ${res.omitted.join(', ')}.` : ''
+      const nAdj = res.attached_count || 0
+      alert(
+        `Correo enviado a ${res.sent_to}` +
+          (nAdj ? ` con ${nAdj} archivo${nAdj === 1 ? '' : 's'} adjunto${nAdj === 1 ? '' : 's'}.` : '.') +
+          omitidos
+      )
+      setModalEnviar(null)
+    } catch (err) {
+      alert('No se pudo enviar el correo: ' + (err.message || err))
+    } finally {
+      setEnviandoDoc(null)
+    }
   }
 
   const cerrarVistaDoc = () => {
@@ -719,16 +766,28 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
                       {docs.length + docsTareasCount} docs · {tareas.length} tareas {abierta ? '▲' : '▼'}
                     </span>
                   </button>
-                  <select
-                    style={{ ...styles.selectEstado, color: estadoColor[etapa.estado] }}
-                    value={etapa.estado}
-                    onChange={e => cambiarEstado(etapa.id, e.target.value)}
-                  >
-                    <option value="pendiente">Pendiente</option>
-                    <option value="en_proceso">En proceso</option>
-                    <option value="completado">Completado</option>
-                    <option value="omitido">Omitido</option>
-                  </select>
+                  <div style={styles.etapaAcciones}>
+                    <select
+                      style={{ ...styles.selectEstado, color: estadoColor[etapa.estado] }}
+                      value={etapa.estado}
+                      onChange={e => cambiarEstado(etapa.id, e.target.value)}
+                    >
+                      <option value="pendiente">Pendiente</option>
+                      <option value="en_proceso">En proceso</option>
+                      <option value="completado">Completado</option>
+                      <option value="omitido">Omitido</option>
+                    </select>
+                    {puedeEditar && (
+                      <button
+                        style={styles.btnMail}
+                        onClick={() => abrirModalEnviar(etapa)}
+                        disabled={enviandoDoc === etapa.id}
+                        title="Notificar al cliente lo de esta etapa"
+                      >
+                        <Mail size={14} /> {enviandoDoc === etapa.id ? 'Enviando...' : 'Enviar'}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {etapa.fecha && (
@@ -769,16 +828,6 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
                         <button style={styles.btnVer} onClick={() => visualizarDocEtapa(doc)} title="Ver">
                           <Eye size={14} /> Ver
                         </button>
-                        {puedeEditar && (
-                          <button
-                            style={styles.btnMail}
-                            onClick={() => confirmarEnviarDoc(doc)}
-                            disabled={enviandoDoc === doc.id}
-                            title="Enviar al correo del cliente"
-                          >
-                            <Mail size={14} /> {enviandoDoc === doc.id ? 'Enviando...' : 'Enviar'}
-                          </button>
-                        )}
                         {puedeBorrar && (
                           <button style={styles.btnTareaEliminar} onClick={() => eliminarDocEtapa(doc)} title="Eliminar">
                             <X size={14} />
@@ -914,6 +963,89 @@ function EtapasTab({ casoId, puedeBorrar = true, puedeEditar = true }) {
             </div>
           )
         })
+      )}
+
+      {modalEnviar && (
+        <div style={styles.overlay} onClick={() => enviandoDoc ? null : setModalEnviar(null)}>
+          <div style={styles.modalEnviar} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>Notificar etapa</h3>
+              <button style={styles.closeBtn} onClick={() => !enviandoDoc && setModalEnviar(null)}><X size={20} /></button>
+            </div>
+            <p style={{ margin: '0 0 14px', fontSize: '13px', color: '#636e72' }}>
+              {modalEnviar.nombre}. Elige qué enviar al correo del cliente.
+            </p>
+            <div style={styles.envioLista}>
+              {(modalEnviar.notas || '').trim() ? (
+                <label style={styles.envioItem}>
+                  <input
+                    type="checkbox"
+                    checked={!!envioSel.nota}
+                    onChange={() => setEnvioSel((prev) => ({ ...prev, nota: !prev.nota }))}
+                  />
+                  <span>
+                    <strong>Nota de la etapa</strong>
+                    <span style={styles.envioHint}>{modalEnviar.notas}</span>
+                  </span>
+                </label>
+              ) : (
+                <p style={styles.envioVacio}>No hay nota en esta etapa.</p>
+              )}
+
+              <p style={styles.envioGrupo}>Documentos de la etapa</p>
+              {(docsPorEtapa[modalEnviar.id] || []).length === 0 && (
+                <p style={styles.envioVacio}>No hay documentos en la etapa.</p>
+              )}
+              {(docsPorEtapa[modalEnviar.id] || []).map((doc) => (
+                <label key={doc.id} style={styles.envioItem}>
+                  <input
+                    type="checkbox"
+                    checked={!!envioSel.docs[doc.id]}
+                    onChange={() => toggleEnvioDoc(doc.id)}
+                  />
+                  <span>{doc.nombre}</span>
+                </label>
+              ))}
+
+              <p style={styles.envioGrupo}>Actuación registrada</p>
+              {(tareasPorEtapa[modalEnviar.id] || []).length === 0 && (
+                <p style={styles.envioVacio}>No hay actuaciones (tareas) en esta etapa.</p>
+              )}
+              {(tareasPorEtapa[modalEnviar.id] || []).map((t) => {
+                const docsTarea = docsPorTarea[t.id] || []
+                return (
+                  <div key={t.id} style={styles.envioTarea}>
+                    <label style={styles.envioItem}>
+                      <input
+                        type="checkbox"
+                        checked={!!envioSel.tareas[t.id]}
+                        onChange={() => toggleEnvioTarea(t.id)}
+                      />
+                      <span>{t.titulo}</span>
+                    </label>
+                    {docsTarea.map((doc) => (
+                      <label key={doc.id} style={{ ...styles.envioItem, paddingLeft: '28px' }}>
+                        <input
+                          type="checkbox"
+                          checked={!!envioSel.docs[doc.id]}
+                          onChange={() => toggleEnvioDoc(doc.id)}
+                        />
+                        <span>{doc.nombre}</span>
+                      </label>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+            <button
+              style={{ ...styles.btnGuardar, opacity: enviandoDoc ? 0.7 : 1 }}
+              onClick={enviarSeleccionEtapa}
+              disabled={!!enviandoDoc}
+            >
+              {enviandoDoc ? 'Enviando...' : 'Enviar al cliente'}
+            </button>
+          </div>
+        </div>
       )}
 
       {modalNueva && puedeEditar && (
@@ -1411,7 +1543,15 @@ const styles = {
   tareaDocsBox: { display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '28px' },
   btnSubirMini: { display: 'inline-block', backgroundColor: '#fff', color: '#1a1a2e', border: '1px dashed #dfe6e9', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '12px', textAlign: 'center' },
   btnAgregarMini: { display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '0 12px', borderRadius: '8px', cursor: 'pointer' },
+  etapaAcciones: { display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 },
   selectEstado: { border: '1px solid #dfe6e9', borderRadius: '6px', padding: '4px 8px', fontSize: '12px', outline: 'none', cursor: 'pointer', backgroundColor: '#fff', fontWeight: '600' },
+  modalEnviar: { backgroundColor: '#fff', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '520px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' },
+  envioLista: { display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto', maxHeight: '50vh', marginBottom: '16px' },
+  envioGrupo: { margin: '10px 0 4px', fontSize: '11px', fontWeight: '700', color: '#b2bec3', textTransform: 'uppercase' },
+  envioItem: { display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#2d3436', backgroundColor: '#f8f9fb', borderRadius: '8px', padding: '8px 10px', cursor: 'pointer' },
+  envioHint: { display: 'block', fontSize: '12px', color: '#636e72', marginTop: '4px', whiteSpace: 'pre-wrap' },
+  envioVacio: { margin: 0, fontSize: '12px', color: '#b2bec3' },
+  envioTarea: { display: 'flex', flexDirection: 'column', gap: '4px' },
   tareaCard: { display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#f8f9fb', borderRadius: '10px', padding: '12px 16px', marginBottom: '8px', border: '1px solid #eef0f3' },
   btnTareaEliminar: { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#b2bec3', padding: '4px', borderRadius: '4px' },
   btnSubir: { display: 'inline-block', backgroundColor: '#1a1a2e', color: '#c9a84c', border: 'none', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: '600', marginBottom: '16px' },

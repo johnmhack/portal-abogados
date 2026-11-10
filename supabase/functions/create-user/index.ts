@@ -80,8 +80,17 @@ function welcomeHtml(opts: {
             </td>
           </tr>
           <tr>
-            <td style="padding:8px 32px 28px;font-size:12px;color:#b2bec3;">
+            <td style="padding:8px 32px 12px;font-size:12px;color:#b2bec3;">
               Si no esperabas este correo, comunícate con el despacho.
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 32px 28px;font-size:10px;line-height:1.5;color:#95a5a6;font-family:Arial,Helvetica,sans-serif;border-top:1px solid #eef0f3;">
+              <p style="margin:14px 0 8px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#7f8c8d;">Aviso legal</p>
+              <p style="margin:0 0 8px;">Este mensaje es confidencial y puede contener información privilegiada. Su uso o divulgación está prohibido para personas distintas de su destinatario. Si ha recibido esta comunicación por error, por favor, elimine su contenido y notifique inmediatamente al remitente.</p>
+              <p style="margin:0 0 8px;">Queda prohibida su retención, grabación, utilización, aprovechamiento o divulgación con cualquier propósito sin autorización.</p>
+              <p style="margin:0 0 8px;">Este mensaje ha sido sometido a programas antivirus. No obstante, SAR Consultores Integrales no asume responsabilidad por eventuales daños derivados de la recepción o utilización de este material. Es responsabilidad del destinatario verificar, por sus propios medios, la existencia de virus u otros defectos.</p>
+              <p style="margin:0;">El contenido de este correo electrónico refleja exclusivamente la opinión de su remitente y no representa necesariamente la posición oficial de SAR Consultores Integrales ni la de sus directivos.</p>
             </td>
           </tr>
         </table>

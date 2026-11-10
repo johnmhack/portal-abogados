@@ -20,16 +20,7 @@ async function extraerDetalle(data, error) {
   return error?.message || 'No se pudo enviar el correo'
 }
 
-export async function notificarDocumentoCliente(docOrId) {
-  const body = typeof docOrId === 'object' && docOrId
-    ? {
-        document_id: docOrId.id,
-        case_id: docOrId.case_id,
-        nombre: docOrId.nombre,
-        url: docOrId.url,
-      }
-    : { document_id: docOrId }
-
+async function invocarNotificacion(body) {
   const { data, error } = await supabase.functions.invoke('notify-document', {
     body,
   })
@@ -44,4 +35,33 @@ export async function notificarDocumentoCliente(docOrId) {
     )
   }
   throw new Error(detalle)
+}
+
+export async function notificarDocumentoCliente(docOrId) {
+  const body = typeof docOrId === 'object' && docOrId
+    ? {
+        document_id: docOrId.id,
+        case_id: docOrId.case_id,
+        nombre: docOrId.nombre,
+        url: docOrId.url,
+      }
+    : { document_id: docOrId }
+
+  return invocarNotificacion(body)
+}
+
+export async function notificarActuacionCliente({
+  caseId,
+  stageId,
+  documentIds = [],
+  nota = null,
+  tareas = [],
+}) {
+  return invocarNotificacion({
+    case_id: caseId,
+    stage_id: stageId,
+    document_ids: documentIds,
+    nota: nota || undefined,
+    tareas,
+  })
 }

@@ -10,6 +10,7 @@ const corsHeaders = {
 
 const STAFF_ROLES = ['admin', 'superadmin', 'abogado', 'socio', 'asistente', 'contador']
 const MAX_ATTACH_BYTES = 8 * 1024 * 1024
+const MAX_TOTAL_ATTACH_BYTES = 12 * 1024 * 1024
 
 function escapeHtml(value: string) {
   return (value || '')
@@ -81,14 +82,21 @@ async function tamanoArchivo(
   return null
 }
 
+function listaHtml(items: string[]) {
+  return items.map((item) => escapeHtml(item)).join('<br/>')
+}
+
 function documentoHtml(opts: {
   nombreCliente: string
   tituloCaso: string
   radicado: string | null
   nombreEtapa: string | null
-  nombreArchivo: string
+  archivos: string[]
+  nota: string | null
+  tareas: string[]
   fechaRegistro: string
   conAdjunto: boolean
+  omitidos: string[]
   logoSrc: string
 }) {
   const nombre = escapeHtml(opts.nombreCliente)
@@ -96,11 +104,36 @@ function documentoHtml(opts: {
     opts.radicado ? `${opts.tituloCaso} / ${opts.radicado}` : opts.tituloCaso,
   )
   const etapa = escapeHtml(opts.nombreEtapa || 'En trámite')
-  const archivo = escapeHtml(opts.nombreArchivo)
   const fecha = escapeHtml(opts.fechaRegistro)
-  const adjuntoTxt = opts.conAdjunto
-    ? 'Se adjunta el documento correspondiente para su conocimiento y consulta.'
-    : 'El archivo es demasiado grande para adjuntarlo. Ingrese al portal o comuníquese con el despacho para recibirlo.'
+  const archivos = opts.archivos.length ? listaHtml(opts.archivos) : '—'
+  const actuacion = opts.tareas.length
+    ? listaHtml(opts.tareas)
+    : (opts.archivos.length
+      ? archivos
+      : (opts.nota ? 'Nota de la etapa' : 'Actuación'))
+  const filas = [
+    filaDetalle('Proceso', proceso),
+    filaDetalle('Actuación registrada', actuacion),
+    filaDetalle('Etapa procesal', etapa),
+  ]
+  if (opts.archivos.length) {
+    filas.push(filaDetalle('Documento adjunto', archivos))
+  }
+  if (opts.nota) {
+    filas.push(filaDetalle('Notas', escapeHtml(opts.nota).replace(/\n/g, '<br/>')))
+  }
+  filas.push(filaDetalle('Fecha de registro', fecha, true))
+
+  let adjuntoTxt = 'No hay documentos adjuntos en este envío.'
+  if (opts.conAdjunto && opts.omitidos.length) {
+    adjuntoTxt = `Se adjuntan los documentos que caben en el correo. No se adjuntaron por tamaño: ${escapeHtml(opts.omitidos.join(', '))}.`
+  } else if (opts.conAdjunto) {
+    adjuntoTxt = opts.archivos.length > 1
+      ? 'Se adjuntan los documentos correspondientes para su conocimiento y consulta.'
+      : 'Se adjunta el documento correspondiente para su conocimiento y consulta.'
+  } else if (opts.archivos.length) {
+    adjuntoTxt = 'Los archivos son demasiado grandes para adjuntarlos. Ingrese al portal o comuníquese con el despacho para recibirlos.'
+  }
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -136,11 +169,7 @@ function documentoHtml(opts: {
                 <tr>
                   <td style="padding:8px 20px 8px 18px;">
                     <table width="100%" cellpadding="0" cellspacing="0">
-                      ${filaDetalle('Proceso', proceso)}
-                      ${filaDetalle('Actuación registrada', archivo)}
-                      ${filaDetalle('Etapa procesal', etapa)}
-                      ${filaDetalle('Documento adjunto', archivo)}
-                      ${filaDetalle('Fecha de registro', fecha, true)}
+                      ${filas.join('')}
                     </table>
                   </td>
                 </tr>
@@ -158,8 +187,17 @@ function documentoHtml(opts: {
             </td>
           </tr>
           <tr>
-            <td style="padding:18px 32px 28px;font-size:11px;color:#95a5a6;font-family:Arial,Helvetica,sans-serif;font-style:italic;">
+            <td style="padding:18px 32px 12px;font-size:11px;color:#95a5a6;font-family:Arial,Helvetica,sans-serif;font-style:italic;">
               Notificación automática del sistema de seguimiento de procesos. Si tiene alguna inquietud, comuníquese con nuestro despacho.
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 32px 28px;font-size:10px;line-height:1.5;color:#95a5a6;font-family:Arial,Helvetica,sans-serif;border-top:1px solid #eef0f3;">
+              <p style="margin:14px 0 8px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#7f8c8d;">Aviso legal</p>
+              <p style="margin:0 0 8px;">Este mensaje es confidencial y puede contener información privilegiada. Su uso o divulgación está prohibido para personas distintas de su destinatario. Si ha recibido esta comunicación por error, por favor, elimine su contenido y notifique inmediatamente al remitente.</p>
+              <p style="margin:0 0 8px;">Queda prohibida su retención, grabación, utilización, aprovechamiento o divulgación con cualquier propósito sin autorización.</p>
+              <p style="margin:0 0 8px;">Este mensaje ha sido sometido a programas antivirus. No obstante, SAR Consultores Integrales no asume responsabilidad por eventuales daños derivados de la recepción o utilización de este material. Es responsabilidad del destinatario verificar, por sus propios medios, la existencia de virus u otros defectos.</p>
+              <p style="margin:0;">El contenido de este correo electrónico refleja exclusivamente la opinión de su remitente y no representa necesariamente la posición oficial de SAR Consultores Integrales ni la de sus directivos.</p>
             </td>
           </tr>
         </table>
@@ -249,26 +287,43 @@ Deno.serve(async (req) => {
     }
 
     const documentId = body.document_id ?? body.documentId ?? body.id
+    const idsRaw = body.document_ids ?? body.documentIds
+    const documentIds = Array.isArray(idsRaw)
+      ? idsRaw.filter((id) => id != null && String(id).length > 0).map(String)
+      : (documentId ? [String(documentId)] : [])
     const caseId = body.case_id ?? body.caseId
+    const stageId = body.stage_id ?? body.stageId
     const nombreArchivo = typeof body.nombre === 'string' ? body.nombre : null
     const urlArchivo = typeof body.url === 'string' ? body.url : null
+    const nota = typeof body.nota === 'string' ? body.nota.trim() : ''
+    const tareas = Array.isArray(body.tareas)
+      ? body.tareas.map((t) => (typeof t === 'string' ? t.trim() : String(t?.titulo || '').trim())).filter(Boolean)
+      : []
     const camposDoc = 'id, nombre, tipo_documento, url, case_id, stage_id, creado_en'
 
-    async function buscarDoc() {
-      if (documentId) {
+    type DocRow = {
+      id: string
+      nombre: string
+      tipo_documento: string | null
+      url: string
+      case_id: string
+      stage_id: string | null
+      creado_en?: string | null
+    }
+
+    async function buscarDocUnico(): Promise<DocRow | null> {
+      if (documentIds.length === 1) {
         const porId = await primeroQuePueda((c) =>
-          c.from('documents').select(camposDoc).eq('id', documentId).maybeSingle()
+          c.from('documents').select(camposDoc).eq('id', documentIds[0]).maybeSingle()
         )
-        if (porId.error) {
-          throw new Error('Error al leer documento: ' + porId.error.message)
-        }
-        if (porId.data) return porId.data
+        if (porId.error) throw new Error('Error al leer documento: ' + porId.error.message)
+        if (porId.data) return porId.data as DocRow
       }
       if (caseId && urlArchivo) {
         const porUrl = await primeroQuePueda((c) =>
           c.from('documents').select(camposDoc).eq('case_id', caseId).eq('url', urlArchivo).maybeSingle()
         )
-        if (porUrl.data) return porUrl.data
+        if (porUrl.data) return porUrl.data as DocRow
       }
       if (caseId && nombreArchivo) {
         const porNombre = await primeroQuePueda(async (c) => {
@@ -280,24 +335,40 @@ Deno.serve(async (req) => {
             .limit(1)
           return { data: r.data?.[0] ?? null, error: r.error }
         })
-        if (porNombre.data) return porNombre.data
+        if (porNombre.data) return porNombre.data as DocRow
       }
       return null
     }
 
-    const doc = await buscarDoc()
-    if (!doc) {
+    const docs: DocRow[] = []
+    if (documentIds.length > 1) {
+      for (const id of documentIds) {
+        const porId = await primeroQuePueda((c) =>
+          c.from('documents').select(camposDoc).eq('id', id).maybeSingle()
+        )
+        if (porId.error) throw new Error('Error al leer documento: ' + porId.error.message)
+        if (porId.data) docs.push(porId.data as DocRow)
+      }
+    } else {
+      const uno = await buscarDocUnico()
+      if (uno) docs.push(uno)
+    }
+
+    if (!docs.length && !nota && !tareas.length) {
       throw new Error(
-        'No se encontró el documento' +
-          (documentId ? ` (id=${documentId})` : '') +
+        'Seleccione al menos un documento, una nota o una tarea' +
+          (documentIds[0] ? ` (id=${documentIds[0]})` : '') +
           (nombreArchivo ? ` (${nombreArchivo})` : '')
       )
     }
 
+    const caseIdFinal = docs[0]?.case_id || caseId
+    if (!caseIdFinal) throw new Error('Falta el caso para notificar')
+
     const { data: caso, error: casoError } = await primeroQuePueda((c) =>
       c.from('cases')
         .select('id, titulo, numero_radicado, abogado_id, client_id, clients(nombre, apellido, correo)')
-        .eq('id', doc.case_id)
+        .eq('id', caseIdFinal)
         .maybeSingle()
     )
 
@@ -313,35 +384,53 @@ Deno.serve(async (req) => {
     const correo = (cliente?.correo || '').trim()
     if (!correo) throw new Error('El cliente no tiene correo registrado')
 
+    const stageIdFinal = stageId || docs[0]?.stage_id
     let nombreEtapa: string | null = null
-    if (doc.stage_id) {
+    if (stageIdFinal) {
       const { data: etapa } = await primeroQuePueda((c) =>
-        c.from('case_stages').select('nombre').eq('id', doc.stage_id).maybeSingle()
+        c.from('case_stages').select('nombre').eq('id', stageIdFinal).maybeSingle()
       )
       nombreEtapa = etapa?.nombre || null
     }
 
-    let conAdjunto = false
-    let buffer: Uint8Array | null = null
-    let fileBytes = await tamanoArchivo(supabaseUser, doc.url)
-    if (fileBytes == null) fileBytes = await tamanoArchivo(admin, doc.url)
-
-    if (fileBytes != null && fileBytes > 0 && fileBytes <= MAX_ATTACH_BYTES) {
-      let archivo: Blob | null = null
-      const downUser = await supabaseUser.storage.from('documentos').download(doc.url)
-      if (!downUser.error && downUser.data) {
-        archivo = downUser.data
-      } else {
-        const downAdmin = await admin.storage.from('documentos').download(doc.url)
-        if (downAdmin.error || !downAdmin.data) {
-          throw new Error('No se pudo leer el archivo para enviarlo')
-        }
-        archivo = downAdmin.data
-      }
-
-      buffer = new Uint8Array(await archivo.arrayBuffer())
-      conAdjunto = buffer.length > 0 && buffer.length <= MAX_ATTACH_BYTES
+    async function descargarArchivo(path: string) {
+      const downUser = await supabaseUser.storage.from('documentos').download(path)
+      if (!downUser.error && downUser.data) return downUser.data
+      const downAdmin = await admin.storage.from('documentos').download(path)
+      if (downAdmin.error || !downAdmin.data) return null
+      return downAdmin.data
     }
+
+    const pdfAdjuntos: { filename: string; content: string; content_type: string }[] = []
+    const omitidos: string[] = []
+    let totalAdjuntos = 0
+
+    for (const doc of docs) {
+      let fileBytes = await tamanoArchivo(supabaseUser, doc.url)
+      if (fileBytes == null) fileBytes = await tamanoArchivo(admin, doc.url)
+      if (fileBytes == null || fileBytes <= 0 || fileBytes > MAX_ATTACH_BYTES || totalAdjuntos + fileBytes > MAX_TOTAL_ATTACH_BYTES) {
+        omitidos.push(doc.nombre)
+        continue
+      }
+      const archivo = await descargarArchivo(doc.url)
+      if (!archivo) {
+        omitidos.push(doc.nombre)
+        continue
+      }
+      const buffer = new Uint8Array(await archivo.arrayBuffer())
+      if (!buffer.length || buffer.length > MAX_ATTACH_BYTES || totalAdjuntos + buffer.length > MAX_TOTAL_ATTACH_BYTES) {
+        omitidos.push(doc.nombre)
+        continue
+      }
+      totalAdjuntos += buffer.length
+      pdfAdjuntos.push({
+        filename: doc.nombre,
+        content: bytesToBase64(buffer),
+        content_type: doc.tipo_documento || 'application/octet-stream',
+      })
+    }
+
+    let conAdjunto = pdfAdjuntos.length > 0
 
     const apiKey = Deno.env.get('RESEND_API_KEY')
     if (!apiKey) throw new Error('Falta RESEND_API_KEY en los secretos de Supabase')
@@ -359,9 +448,12 @@ Deno.serve(async (req) => {
       tituloCaso,
       radicado: caso.numero_radicado || null,
       nombreEtapa,
-      nombreArchivo: doc.nombre,
-      fechaRegistro: fechaDdMmYyyy(doc.creado_en),
+      archivos: docs.map((d) => d.nombre),
+      nota: nota || null,
+      tareas,
+      fechaRegistro: fechaDdMmYyyy(docs[0]?.creado_en || null),
       conAdjunto,
+      omitidos,
       logoSrc,
     }
 
@@ -381,12 +473,8 @@ Deno.serve(async (req) => {
         content_type: 'image/png',
       })
     }
-    if (conAdjunto && buffer) {
-      attachments.push({
-        filename: doc.nombre,
-        content: bytesToBase64(buffer),
-        content_type: doc.tipo_documento || 'application/octet-stream',
-      })
+    for (const pdf of pdfAdjuntos) {
+      attachments.push(pdf)
     }
     if (attachments.length) payload.attachments = attachments
 
@@ -431,6 +519,8 @@ Deno.serve(async (req) => {
         success: true,
         sent_to: correo,
         attached: conAdjunto,
+        attached_count: pdfAdjuntos.length,
+        omitted: omitidos,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
